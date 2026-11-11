@@ -1,0 +1,6 @@
+streamlit>=1.42,<2
+supabase>=2.20,<3
+pandas>=2.2,<3
+plotly>=5.24,<7
+reportlab>=4.2,<5
+XlsxWriter>=3.2,<4
