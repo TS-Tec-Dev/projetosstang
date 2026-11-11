@@ -256,7 +256,10 @@ create policy "profile self/shared" on public.profiles for select to authenticat
  ));
 drop policy if exists "project read members" on public.projects;
 create policy "project read members" on public.projects for select to authenticated
- using (public.is_member(id));
+ -- A associação project_members surge em um trigger AFTER INSERT.
+ -- INSERT ... RETURNING precisa ler a linha antes dessa associação ficar visível;
+ -- por isso o proprietário também deve ter permissão direta de SELECT.
+ using (owner_id=(select auth.uid()) or public.is_member(id));
 drop policy if exists "project create self" on public.projects;
 create policy "project create self" on public.projects for insert to authenticated
  with check(owner_id=(select auth.uid()));

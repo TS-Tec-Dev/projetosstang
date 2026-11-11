@@ -4,6 +4,15 @@ Sistema online de gestão de projetos, licenciamentos, tarefas e cronogramas, fe
 
 > **Versão inicial (MVP)**: inclui login, projetos, fluxo-modelo de etapas, quadro de tarefas, checklist, documentos, financeiro, relatórios e colaboração. É um sistema próprio, inspirado no conceito de gestão de tarefas, **não é uma cópia do Bitrix24 nem uma integração com o Bitrix24**.
 
+
+## Correção RLS — erro 42501 ao criar projeto (v0.1.1)
+
+Se aparecer `new row violates row-level security policy for table "projects"` ao clicar em **Criar projeto e tarefas**, execute **uma vez** no **Supabase SQL Editor** o conteúdo do arquivo:
+
+`supabase/migrations/20261111_fix_projects_rls.sql`
+
+A política de leitura agora autoriza o proprietário diretamente, além dos membros do projeto. Isso é necessário porque o projeto é inserido com `RETURNING` e a associação automática do proprietário na tabela `project_members` depende de um trigger posterior. A alteração **não desabilita RLS** e **não remove dados**. Depois, atualize a página do Streamlit e tente novamente. Não cole o SQL no Microsoft SQL Server Management Studio.
+
 ## 1. Recursos
 
 - Projetos por empreendimento, empresa e local, com datas de início e prazo global.
