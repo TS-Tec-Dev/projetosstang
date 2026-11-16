@@ -39,7 +39,8 @@ def _footer(canvas, doc):
     canvas.drawRightString(doc.pagesize[0]-37, 20, f'Pagina {doc.page}')
 
 
-def pdf_report(project: dict, stages: list, tasks: list, entries: list, docs: list) -> bytes:
+def pdf_report(project: dict, stages: list, tasks: list, entries: list, docs: list,
+               detail_map: dict | None = None, milestones: list | None = None) -> bytes:
     """Relatório formato A4 paisagem: físico, financeiro e relação documental."""
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=37, rightMargin=37,
@@ -84,6 +85,26 @@ def pdf_report(project: dict, stages: list, tasks: list, entries: list, docs: li
     for x in docs:
         d.append([x['category'],x['filename'],task_names.get(x['task_id'],'-'),pretty_date(x.get('uploaded_at'))])
     _table(story,d,[112,293,283,74],styles)
+    if detail_map:
+        from src.project_x import code_for_task, BY_CODE
+        story += [Paragraph('Fichas técnicas · modelo PROJETO X', styles['Sec'])]
+        field_rows=[['Item','Projeto / documentação','Campos registrados']]
+        for t in tasks:
+            record=detail_map.get(t['id']) or {}
+            code=code_for_task(t,record)
+            if not code:continue
+            spec=BY_CODE[code]
+            fields=record.get('data') or {}
+            line=' | '.join(f'{key}: {value}' for key,value in fields.items() if str(value or '').strip())
+            field_rows.append([code,spec['name'],line[:800] or 'A preencher'])
+        _table(story,field_rows,[65,180,517],styles)
+    if milestones:
+        story += [Paragraph('Atividades do cronograma físico', styles['Sec'])]
+        mrows=[['Tarefa','Atividade','Início','Prazo','Avanço','Situação']]
+        for m in sorted(milestones,key=lambda r:(r.get('start_date') or '',r.get('title') or '')):
+            mrows.append([task_names.get(m['task_id'],'-'),m['title'],pretty_date(m.get('start_date')),
+                          pretty_date(m.get('due_date')),f"{m.get('percent_done',0)}%",m.get('status','')])
+        _table(story,mrows,[155,290,75,75,67,100],styles)
     story += [Spacer(1,8),Paragraph('Os arquivos originais permanecem no armazenamento privado; este PDF contém a relação de anexos.',styles['Sub'])]
     doc.build(story,onFirstPage=_footer,onLaterPages=_footer)
     return buf.getvalue()
@@ -103,7 +124,7 @@ def _table(story, rows, widths, styles):
     story.append(t)
 
 
-def xlsx_report(project, stages, tasks, entries, docs) -> bytes:
+def xlsx_report(project, stages, tasks, entries, docs, detail_map=None, milestones=None) -> bytes:
     """Pasta de trabalho XLSX, com abas de tarefas, financeiro, documentos e resumo."""
     buf=BytesIO()
     wb=xlsxwriter.Workbook(buf, {'in_memory':True})
@@ -111,7 +132,7 @@ def xlsx_report(project, stages, tasks, entries, docs) -> bytes:
     head=wb.add_format({'bold':True,'font_color':'#FFFFFF','bg_color':'#0F766E','border':0,'text_wrap':True})
     money=wb.add_format({'num_format':'R$ #,##0.00'})
     pct=wb.add_format({'num_format':'0"%"'})
-    for sheet_name in ['Resumo','Execução','Financeiro','Documentos']:
+    for sheet_name in ['Resumo','Execução','Financeiro','Documentos','Fichas PROJETO X','Atividades']:
         ws=wb.add_worksheet(sheet_name)
         ws.set_tab_color('#0F766E')
         ws.hide_gridlines(2)
@@ -152,5 +173,24 @@ def xlsx_report(project, stages, tasks, entries, docs) -> bytes:
     section('Documentos',['Categoria','Arquivo','Tarefa','Tamanho bytes','Enviado em'],[
         [d['category'],d['filename'],task_names.get(d['task_id'],''),d['size_bytes'],d['uploaded_at'][:19]] for d in docs],
         [19,55,48,23,23])
+    if detail_map:
+        from src.project_x import code_for_task, BY_CODE
+        field_rows=[]
+        for t in tasks:
+            rec=detail_map.get(t['id']) or {}
+            code=code_for_task(t,rec)
+            if not code:continue
+            spec=BY_CODE[code]
+            details=rec.get('data') or {}
+            for key,val in details.items():
+                field_rows.append([code,spec['name'],key,str(val or ''),t.get('status','')])
+            if not details:field_rows.append([code,spec['name'],'Pendente','',t.get('status','')])
+        section('Fichas PROJETO X',['Item','Área','Campo','Valor','Situação'],field_rows,[12,35,35,66,20])
+    else:
+        section('Fichas PROJETO X',['Item','Área','Campo','Valor','Situação'],[],[12,35,35,66,20])
+    section('Atividades',['Tarefa','Atividade','Início','Fim','Avanço (%)','Situação'],[
+        [task_names.get(m['task_id'],'-'),m['title'],m['start_date'],m['due_date'],
+         m['percent_done'],m['status']] for m in (milestones or [])],
+         [44,48,18,18,18,20])
     wb.close()
     return buf.getvalue()

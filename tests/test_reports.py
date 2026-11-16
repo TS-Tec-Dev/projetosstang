@@ -26,8 +26,8 @@ def test_pdf_report_is_valid():
     assert len(output)>2000
 
 
-def test_xlsx_report_has_four_sheets():
+def test_xlsx_report_has_six_sheets():
     output=xlsx_report(PROJECT,STAGES,TASKS,FINANCE,DOCS)
     with ZipFile(BytesIO(output)) as z:
         assert 'xl/workbook.xml' in z.namelist()
-        assert len([x for x in z.namelist() if x.startswith('xl/worksheets/sheet')])==4
+        assert len([x for x in z.namelist() if x.startswith('xl/worksheets/sheet')])==6

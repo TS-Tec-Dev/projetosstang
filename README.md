@@ -1,9 +1,30 @@
 # CronogramaObras Cloud
 
+**Versão 0.1.3 – roteiro PROJETO X integrado ao v0.1.2**
+
+O sistema agora incorpora o modelo do PDF **PROJETO X**, organizado em 1. DOCUMENTAÇÃO (1.1–1.3) e 2. PROJETOS (2.1–2.10), mantendo tarefas, equipe, cronogramas, anexos, relatórios PDF e Excel, login e RLS do Supabase. Inclui inclusão do roteiro em projetos antigos sem excluir dados.
+
+**Para atualizar sua instalação existente, siga primeiro `ATUALIZAR_PROJETO_X.md`.** Execute `supabase/migrations/20261116_projeto_x.sql` no **SQL Editor do Supabase** e, depois, publique este código no GitHub e reinicie o Streamlit. A migração e o código precisam ser instalados juntos.
+
+---
+
 Sistema online de gestão de projetos, licenciamentos, tarefas e cronogramas, feito em **Streamlit + Supabase PostgreSQL/Auth/Storage**, pronto para ser versionado no **GitHub** e implantado no **Streamlit Community Cloud**.
 
 > **Versão inicial (MVP)**: inclui login, projetos, fluxo-modelo de etapas, quadro de tarefas, checklist, documentos, financeiro, relatórios e colaboração. É um sistema próprio, inspirado no conceito de gestão de tarefas, **não é uma cópia do Bitrix24 nem uma integração com o Bitrix24**.
 
+
+## Correção definitiva do fluxo de criação (v0.1.2)
+
+Se o erro `new row violates row-level security policy for table "projects"` persistir após v0.1.1:
+
+1. Abra **Supabase → SQL Editor** do projeto conectado ao Streamlit.
+2. Execute `supabase/migrations/20261111_atomic_project_creation.sql`.
+3. Envie o novo código `app.py` + `src/db.py` e demais arquivos da v0.1.2 ao GitHub e faça o **reboot** do Streamlit.
+4. Saia e entre novamente no sistema antes de criar um projeto.
+
+O app agora chama `create_project_workflow` via `rpc`, e uma função privada cria o projeto e todas as etapas/tarefas na mesma transação. Usa `auth.uid()` no banco, não o ID enviado pelo frontend. Se a operação falhar, toda a transação é revertida. RLS continua habilitado; nunca use `service_role` no Streamlit. Essa migração pode ser executada novamente (CREATE OR REPLACE), mas deve ser analisada antes de aplicar em um ambiente já customizado.
+
+**Importante:** não basta executar o SQL: a versão do código também precisa ser atualizada para usar o RPC novo. O teste local não substitui um teste real no Supabase com JWT autenticado.
 
 ## Correção RLS — erro 42501 ao criar projeto (v0.1.1)
 

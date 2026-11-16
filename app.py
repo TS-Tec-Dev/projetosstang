@@ -19,13 +19,15 @@ from src.db import (
 )
 from src.reports import brief_stats, pdf_report, xlsx_report
 from src.templates import DEFAULT_WORKFLOW, WORKFLOWS, generate_template
+from src.project_x import DEFAULT_SECTION_NAMES, make_template_rows, doc_categories, BY_CODE, code_for_task, checklist_doc_status
+from src.project_x_ui import technical_form, execution_detail, get_detail_map, get_milestones, overview_plan
 
 st.set_page_config(page_title="CronogramaObras Cloud", page_icon="🏗️", layout="wide", initial_sidebar_state="expanded")
 
 STATUS = ["A fazer", "Em andamento", "Em aprovação", "Concluída", "Bloqueada"]
 PRIORITY = ["Baixa", "Normal", "Alta", "Urgente"]
-CATEGORIES = ["Orçamento", "Projeto", "Licença", "Comprovante", "Imagem", "Planilha", "Outro"]
-NAV = ["Visão geral", "Quadro de tarefas", "Cronograma", "Financeiro", "Documentos", "Equipe", "Novo projeto"]
+CATEGORIES = doc_categories()
+NAV = ["Visão geral", "Plano PROJETO X", "Quadro de tarefas", "Cronograma", "Financeiro", "Documentos", "Equipe", "Novo projeto"]
 
 st.markdown("""<style>
   .block-container {padding-top: 1.2rem; padding-bottom: 3rem; max-width: 1660px;}
@@ -138,7 +140,9 @@ def top_banner(project):
 
 def show_new_project():
     st.title("Novo projeto")
-    st.caption("Selecione os órgãos envolvidos. O sistema abre automaticamente as etapas e suas tarefas, com prazos iniciais editáveis.")
+    st.caption("Escolha o modelo do documento PROJETO X ou mantenha o fluxo clássico da versão 0.1.2. As etapas e tarefas serão criadas automaticamente.")
+    model=st.radio('Modelo de cronograma', ['PROJETO X (documentação + 10 projetos)',
+                 'Clássico v0.1.2 (por órgãos)'], horizontal=True)
     with st.form("new_project",clear_on_submit=False):
         c1,c2=st.columns(2)
         with c1:
@@ -149,8 +153,13 @@ def show_new_project():
         with c2:
             target=st.date_input("Previsão de conclusão",date.today()+timedelta(days=180))
             description=st.text_area("Descrição do escopo",height=116)
-        stages=st.multiselect("Etapas a incluir",list(WORKFLOWS),default=DEFAULT_WORKFLOW)
-        st.info("As datas do modelo são apenas estimativas de planejamento, e não prazos oficiais dos órgãos.")
+        if model.startswith('PROJETO X'):
+            st.caption('O modelo do PDF gera 1.1–1.3 em Documentação e 2.1–2.10 em Projetos. Você também pode incluir as etapas operacionais anteriores.')
+            stages=st.multiselect("Etapas a incluir",DEFAULT_SECTION_NAMES+list(WORKFLOWS),
+                                  default=DEFAULT_SECTION_NAMES,key='project_x_stages')
+        else:
+            stages=st.multiselect("Etapas a incluir",list(WORKFLOWS),default=DEFAULT_WORKFLOW,key='classic_stages')
+        st.info("As datas do modelo são estimativas de planejamento e não prazos oficiais dos órgãos.")
         send=st.form_submit_button("Criar projeto e tarefas",type="primary",use_container_width=True)
     if send:
         if len(title.strip())<3 or not stages:
@@ -159,10 +168,19 @@ def show_new_project():
             st.warning("A conclusão não pode anteceder o início.")
         else:
             try:
+                if model.startswith('PROJETO X'):
+                    templates = make_template_rows(start,stages)
+                    extra_stages=[name for name in stages if name in WORKFLOWS]
+                    if extra_stages:
+                        extra = generate_template(start,extra_stages)
+                        for row in extra:row['stage_order']+=2
+                        templates.extend(extra)
+                else:
+                    templates=generate_template(start,stages)
                 project=add_project_with_workflow(current_client(),st.session_state['user_id'],{
                     "title":title.strip(),"client_name":client_name.strip(),"location":location.strip(),
                     "description":description.strip(),"start_date":start.isoformat(),"target_date":target.isoformat(),
-                },generate_template(start,stages))
+                },templates)
                 st.session_state["project_id"]=project["id"]
                 st.session_state["page"]="Visão geral"
                 st.success("Projeto criado com o fluxo completo.")
@@ -222,11 +240,17 @@ def dashboard(project,stages,tasks,entries,docs):
 def export_buttons(project,stages,tasks,entries,docs):
     c1,c2=st.columns(2)
     try:
+        extras = {}
+        try:
+            extras = {'detail_map':get_detail_map(current_client(),project['id']),
+                      'milestones':get_milestones(current_client(),project['id'])}
+        except Exception:
+            st.caption('Relatório do modelo novo indisponível até aplicar a migração v0.1.3. O relatório anterior permanece utilizável.')
         with c1:
-            st.download_button("📄 Baixar relatório PDF",pdf_report(project,stages,tasks,entries,docs),
+            st.download_button("📄 Baixar relatório PDF",pdf_report(project,stages,tasks,entries,docs,**extras),
               file_name="relatorio_cronograma.pdf",mime="application/pdf",use_container_width=True)
         with c2:
-            st.download_button("📊 Baixar relatório Excel",xlsx_report(project,stages,tasks,entries,docs),
+            st.download_button("📊 Baixar relatório Excel",xlsx_report(project,stages,tasks,entries,docs,**extras),
               file_name="relatorio_cronograma.xlsx",
               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
     except Exception as exc: fail(exc,"Falha ao gerar relatório")
@@ -299,9 +323,10 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team):
     st.caption(task.get('description') or 'Detalhes, documentos, checklist e fluxo financeiro da tarefa.')
     related_docs=[d for d in all_docs if d['task_id']==task['id']]
     own_budget=any(d['category']=='Orçamento' for d in related_docs)
-    if not own_budget:st.warning('Esta etapa ainda não possui orçamento anexado. A conclusão só será liberada após o envio.')
-    tab1,tab2,tab3,tab4,tab5=st.tabs(['Detalhes','Checklist','Orçamento e financeiro','Anexos','Comentários'])
-    with tab1:
+    if not own_budget:st.warning('Esta tarefa ainda não possui orçamento anexado. A conclusão só será liberada após o envio.')
+    panels=['Ficha técnica','Detalhes','Checklist','Financeiro','Execução','Anexos','Comentários']
+    pane=st.radio('Área da tarefa',panels,key=f'task_panel_{task["id"]}',horizontal=True)
+    if pane=='Detalhes':
         with st.form('task_edit'):
             title=st.text_input('Título',value=task['title'],disabled=not can_edit)
             desc=st.text_area('Descrição e requisitos',value=task.get('description') or '',height=145,disabled=not can_edit)
@@ -336,10 +361,18 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team):
                         'percent_done':100 if status=='Concluída' else progress,'planned_cost':planned,
                     });st.success('Tarefa atualizada.');st.rerun()
                 except Exception as exc:fail(exc)
-    with tab2:show_checklist(project_id,task,can_edit)
-    with tab3:show_finance_task(project_id,task,can_edit)
-    with tab4:attachments(project_id,task,related_docs,can_edit)
-    with tab5:comments(project_id,task,team)
+    if pane=='Ficha técnica':
+        try:
+            details=current_client().table('task_details').select('*').eq('task_id',task['id']).limit(1).execute().data or []
+            technical_form(current_client(),project_id,task,can_edit,details[0] if details else None)
+        except Exception as exc:fail(exc,'Aplique a migração SQL v0.1.3 para habilitar as fichas técnicas')
+    elif pane=='Checklist':show_checklist(project_id,task,can_edit)
+    elif pane=='Financeiro':show_finance_task(project_id,task,can_edit)
+    elif pane=='Execução':
+        try:execution_detail(current_client(),project_id,task,can_edit)
+        except Exception as exc:fail(exc,'Aplique a migração SQL v0.1.3 para habilitar as atividades de execução')
+    elif pane=='Anexos':attachments(project_id,task,related_docs,can_edit)
+    elif pane=='Comentários':comments(project_id,task,team)
 
 
 def show_checklist(project_id,task,can_edit):
@@ -416,6 +449,12 @@ def show_finance_task(project_id,task,can_edit):
 
 def attachments(project_id,task,docs,can_edit):
     st.markdown('#### Documentos da tarefa')
+    code=code_for_task(task)
+    spec=BY_CODE.get(code)
+    if spec:
+        st.markdown('**Documentação conforme PROJETO X**')
+        for category,found in checklist_doc_status(spec,docs):
+            st.caption(('✅' if found else '⬜')+' '+category)
     st.caption('PDF, imagens (PNG/JPG/WEBP), Excel (XLS/XLSX/XLSM), CSV, Word, DWG, DXF, ZIP e TXT. Até 25 MB por arquivo.')
     if can_edit:
         with st.form('upload_form',clear_on_submit=True):
@@ -499,6 +538,17 @@ def execution_schedule(stages,tasks):
     st.dataframe(pd.DataFrame([{'Etapa':r['Etapa'],'Tarefa':r['Tarefa'],'Início':r['Início'].date(),
        'Prazo':r['Fim'].date(),'Status':r['Status'],'Avanço':str(r['Avanço (%)'])+'%'} for _,r in df.iterrows()]),
        hide_index=True,use_container_width=True)
+    try:
+        milestones=get_milestones(current_client(),st.session_state['project_id'])
+    except Exception:
+        milestones=[]
+    if milestones:
+        st.markdown('#### Atividades detalhadas por item')
+        names={t['id']:t['title'] for t in tasks}
+        md=pd.DataFrame([{'Tarefa':names.get(m['task_id'],'-'),'Atividade':m['title'],
+               'Início':m['start_date'],'Prazo':m['due_date'],
+               'Status':m['status'],'Avanço (%)':m['percent_done']} for m in milestones])
+        st.dataframe(md,hide_index=True,use_container_width=True)
 
 
 def finance_dashboard(tasks,entries):
@@ -607,7 +657,7 @@ def run():
         return
     with st.sidebar:
         st.markdown('### 🏗️ CronogramaObras')
-        st.caption('Gestão de obras e licenças')
+        st.caption('Gestão de obras e licenças · v0.1.3 PROJETO X')
         if st.button('Sair da conta',use_container_width=True):
             try:current_client().auth.sign_out()
             except Exception:pass
@@ -642,6 +692,12 @@ def run():
     can_edit=myrole in ('owner','editor')
     top_banner(project)
     if page=='Visão geral':dashboard(project,stages,tasks,entries,docs)
+    elif page=='Plano PROJETO X':
+        try:
+            detail_map=get_detail_map(current_client(),project_id)
+            milestones=get_milestones(current_client(),project_id)
+            overview_plan(current_client(),project_id,stages,tasks,docs,detail_map,entries,milestones,can_edit)
+        except Exception as exc:fail(exc,'Para usar o plano PROJETO X execute a migração v0.1.3 no Supabase')
     elif page=='Quadro de tarefas':kanban(project_id,stages,tasks,docs,can_edit,team)
     elif page=='Cronograma':execution_schedule(stages,tasks)
     elif page=='Financeiro':finance_dashboard(tasks,entries)

@@ -42,30 +42,25 @@ def delete(client, table: str, row_id: str):
 
 
 def add_project_with_workflow(client, owner_id: str, project_data: dict, template_rows: list[dict]):
-    """Criar projeto + etapas e tarefas; em erro, mostrar a etapa interrompida ao usuário."""
-    project = insert(client, "projects", {**project_data, "owner_id": owner_id})
-    if not project:
-        raise RuntimeError("O projeto não pôde ser criado.")
-    project_id = project["id"]
-    stages = {}
-    for name in dict.fromkeys(item["stage_name"] for item in template_rows):
-        rows = [item for item in template_rows if item["stage_name"] == name]
-        stage = insert(client, "stages", {
-            "project_id": project_id, "name": name, "sort_order": rows[0]["stage_order"],
-        })
-        stages[name] = stage["id"]
-    batch = [{
-        "project_id": project_id,
-        "stage_id": stages[item["stage_name"]],
-        "title": item["title"],
-        "description": item["description"],
-        "sort_order": item["sort_order"],
-        "start_date": item["start_date"],
-        "due_date": item["due_date"],
-    } for item in template_rows]
-    if batch:
-        client.table("tasks").insert(batch).execute()
-    return project
+    """Cria projeto/etapas/tarefas atomicamente pelo RPC (RLS permanece habilitado).
+
+    O banco usa auth.uid() como proprietário e não aceita owner_id do navegador.
+    owner_id é mantido na assinatura apenas para compatibilidade com a interface.
+    """
+    if not template_rows:
+        raise ValueError("Selecione pelo menos uma etapa com tarefas.")
+    response = client.rpc("create_project_workflow", {
+        "p_project": project_data,
+        "p_tasks": template_rows,
+    }).execute()
+    project_id = response.data
+    if isinstance(project_id, list):
+        project_id = project_id[0] if project_id else None
+    if isinstance(project_id, dict):
+        project_id = project_id.get("id")
+    if not project_id:
+        raise RuntimeError("O Supabase não retornou o identificador do projeto.")
+    return {**project_data, "id": str(project_id), "owner_id": owner_id}
 
 
 def upload_document(client, project_id: str, task_id: str, user_id: str, uploaded, category: str):
