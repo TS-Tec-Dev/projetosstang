@@ -8,6 +8,8 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from html import escape
+from pathlib import Path
+from PIL import Image
 
 import pandas as pd
 import plotly.express as px
@@ -18,32 +20,20 @@ from src.db import (
     new_client, pretty_date, query, remove_document, signed_file_url, update, upload_document,
 )
 from src.reports import brief_stats, pdf_report, xlsx_report
-from src.templates import DEFAULT_WORKFLOW, WORKFLOWS, generate_template
-from src.project_x import DEFAULT_SECTION_NAMES, make_template_rows, doc_categories, BY_CODE, code_for_task, checklist_doc_status
-from src.project_x_ui import technical_form, execution_detail, get_detail_map, get_milestones, overview_plan
+from src.workflow import DEFAULT_SECTION_NAMES, make_template_rows, doc_categories, BY_CODE, code_for_task, checklist_doc_status
+from src.workflow_ui import technical_form, execution_detail, get_detail_map, get_milestones, overview_plan
+from src.ui import icon, metric_card, CSS
+from src.backup_ui import backup_page
 
-st.set_page_config(page_title="CronogramaObras Cloud", page_icon="🏗️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="CronogramaObras Cloud", page_icon=Image.open(Path(__file__).parent / "assets/cronograma-favicon.png"), layout="wide", initial_sidebar_state="expanded")
 
 STATUS = ["A fazer", "Em andamento", "Em aprovação", "Concluída", "Bloqueada"]
 PRIORITY = ["Baixa", "Normal", "Alta", "Urgente"]
 CATEGORIES = doc_categories()
-NAV = ["Visão geral", "Plano PROJETO X", "Quadro de tarefas", "Cronograma", "Financeiro", "Documentos", "Equipe", "Novo projeto"]
+NAV = ["Dashboard", "Projetos", "Etapas", "Quadro de tarefas", "Cronograma", "Financeiro", "Documentos", "Equipe", "Relatórios", "Backups"]
+NAV_ICONS = {"Dashboard":"dashboard", "Projetos":"folder", "Etapas":"check", "Quadro de tarefas":"check", "Cronograma":"calendar", "Financeiro":"wallet", "Documentos":"files", "Equipe":"people", "Relatórios":"chart", "Backups":"backup"}
 
-st.markdown("""<style>
-  .block-container {padding-top: 1.2rem; padding-bottom: 3rem; max-width: 1660px;}
-  div[data-testid="stMetric"] {background:#FFFFFF;border:1px solid #E0E8ED;border-radius:13px;padding:15px;}
-  div[data-testid="stMetricLabel"] p {font-size:.83rem!important;color:#526273!important;}
-  .project-banner {background:linear-gradient(120deg,#0D1B2A,#133F4A);color:#fff;
-    padding:23px 27px;border-radius:16px;margin-bottom:18px;}
-  .project-banner h1 {font-size:1.9rem;margin:0 0 5px;color:#fff;}
-  .project-banner p {margin:0;color:#C7DFE3;}
-  .section-caption {color:#64748B;font-size:.88rem;line-height:1.45;}
-  .small-tag {background:#E7F4F2;color:#0F766E;padding:4px 9px;border-radius:30px;font-size:.76rem;font-weight:650;}
-  div[data-testid="stVerticalBlockBorderWrapper"] {border-radius:12px!important;}
-  section[data-testid="stSidebar"] {border-right:1px solid #E0E8ED;}
-  h2,h3 {color:#102638;}
-  button[kind="primary"] {border-radius:9px!important;}
-</style>""", unsafe_allow_html=True)
+st.markdown(CSS, unsafe_allow_html=True)
 
 
 def fail(err, prefix="Operação não concluída"):
@@ -75,7 +65,7 @@ def current_client():
 def login_page():
     a,b,c = st.columns([1,1.5,1])
     with b:
-        st.markdown('<div class="project-banner"><h1>🏗️ CronogramaObras Cloud</h1><p>Projetos, tarefas, aprovações e orçamento em um só lugar.</p></div>',unsafe_allow_html=True)
+        st.markdown('<div class="co-banner"><h1>CronogramaObras Cloud</h1><p>Projetos, tarefas, aprovações e orçamento em um só lugar.</p></div>',unsafe_allow_html=True)
         login_tab,signup_tab = st.tabs(["Entrar", "Criar conta"])
         with login_tab:
             with st.form("login_form"):
@@ -114,7 +104,7 @@ def login_page():
                             st.rerun()
                         st.success("Cadastro iniciado. Confirme o e-mail e depois entre no sistema.")
                     except Exception as exc: fail(exc,"Falha no cadastro")
-        st.caption("Os arquivos ficam em bucket privado no Supabase. Não use a chave service_role na aplicação.")
+        st.caption("Seus dados e arquivos ficam protegidos pelas permissões do empreendimento no Supabase.")
 
 
 def api(table, project_id=None, sort="created_at", asc=False):
@@ -132,61 +122,69 @@ def date_value(text,fallback=None):
 
 
 def top_banner(project):
-    st.markdown('<div class="project-banner"><h1>'+escape(project['title'])+'</h1><p>📍 '+
-      escape(project.get('location') or 'Local a definir')+' &nbsp; • &nbsp; Cliente: '+
-      escape(project.get('client_name') or 'Não informado')+' &nbsp; • &nbsp; Previsão: '+
-      escape(pretty_date(project.get('target_date')))+ '</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="co-banner">'+icon('building','#d1f9f4',45)+
+        '<div><h1>'+escape(project['title'])+'</h1><p>'+escape(project.get('location') or 'Local a definir')+
+        ' &nbsp; · &nbsp; '+escape(project.get('client_name') or 'Empresa não informada')+
+        ' &nbsp; · &nbsp; Previsão '+escape(pretty_date(project.get('target_date')))+
+        '</p></div></div>',unsafe_allow_html=True)
 
 
 def show_new_project():
-    st.title("Novo projeto")
-    st.caption("Escolha o modelo do documento PROJETO X ou mantenha o fluxo clássico da versão 0.1.2. As etapas e tarefas serão criadas automaticamente.")
-    model=st.radio('Modelo de cronograma', ['PROJETO X (documentação + 10 projetos)',
-                 'Clássico v0.1.2 (por órgãos)'], horizontal=True)
+    st.title("Cadastrar empreendimento")
+    st.caption("O planejamento começa com as etapas de Documentação (1.1–1.3) e Projetos (2.1–2.10). Todas as tarefas, datas e valores são editáveis.")
     with st.form("new_project",clear_on_submit=False):
         c1,c2=st.columns(2)
         with c1:
-            title=st.text_input("Nome do projeto *",placeholder="Implantação de base operacional - Itajaí")
+            title=st.text_input("Nome do projeto *",placeholder="Implantação de unidade operacional")
             client_name=st.text_input("Cliente / empresa")
             location=st.text_input("Município / endereço de referência")
             start=st.date_input("Data de início",date.today())
         with c2:
             target=st.date_input("Previsão de conclusão",date.today()+timedelta(days=180))
             description=st.text_area("Descrição do escopo",height=116)
-        if model.startswith('PROJETO X'):
-            st.caption('O modelo do PDF gera 1.1–1.3 em Documentação e 2.1–2.10 em Projetos. Você também pode incluir as etapas operacionais anteriores.')
-            stages=st.multiselect("Etapas a incluir",DEFAULT_SECTION_NAMES+list(WORKFLOWS),
-                                  default=DEFAULT_SECTION_NAMES,key='project_x_stages')
-        else:
-            stages=st.multiselect("Etapas a incluir",list(WORKFLOWS),default=DEFAULT_WORKFLOW,key='classic_stages')
-        st.info("As datas do modelo são estimativas de planejamento e não prazos oficiais dos órgãos.")
-        send=st.form_submit_button("Criar projeto e tarefas",type="primary",use_container_width=True)
+        st.info("13 itens automáticos em duas áreas: matrícula, proprietário e contratos; topografia, projetos, EIV, licenças, acesso e Habite-se. Prazos são somente estimativas internas.")
+        send=st.form_submit_button("Criar projeto e cronograma completo",type="primary",use_container_width=True)
     if send:
-        if len(title.strip())<3 or not stages:
-            st.warning("Informe um nome e escolha pelo menos uma etapa.")
+        if len(title.strip())<3:
+            st.warning("Informe um nome com pelo menos 3 caracteres.")
         elif target<start:
             st.warning("A conclusão não pode anteceder o início.")
         else:
             try:
-                if model.startswith('PROJETO X'):
-                    templates = make_template_rows(start,stages)
-                    extra_stages=[name for name in stages if name in WORKFLOWS]
-                    if extra_stages:
-                        extra = generate_template(start,extra_stages)
-                        for row in extra:row['stage_order']+=2
-                        templates.extend(extra)
-                else:
-                    templates=generate_template(start,stages)
+                templates=make_template_rows(start,DEFAULT_SECTION_NAMES)
                 project=add_project_with_workflow(current_client(),st.session_state['user_id'],{
                     "title":title.strip(),"client_name":client_name.strip(),"location":location.strip(),
                     "description":description.strip(),"start_date":start.isoformat(),"target_date":target.isoformat(),
                 },templates)
-                st.session_state["project_id"]=project["id"]
-                st.session_state["page"]="Visão geral"
-                st.success("Projeto criado com o fluxo completo.")
+                st.session_state['project_id']=project['id']
+                st.session_state['page']='Dashboard'
+                st.success("Empreendimento e 13 etapas criados.")
                 st.rerun()
             except Exception as exc:
-                fail(exc,"Falha ao criar o projeto; verifique se alguma etapa já foi registrada")
+                fail(exc,"Falha na criação do empreendimento. Verifique o SQL de migração do Supabase")
+
+
+def show_projects(projects):
+    st.title('Portfólio de projetos')
+    st.caption('Escolha o empreendimento para acompanhar o andamento, ou crie um novo com o roteiro completo de documentação e projetos.')
+    a,b=st.columns([2,1])
+    with b:
+        if st.button('Criar novo empreendimento',type='primary',use_container_width=True):
+            st.session_state['page']='Novo projeto';st.rerun()
+    if not projects:
+        st.info('Nenhum projeto cadastrado ainda.')
+        return
+    cards=st.columns(3)
+    for n,p in enumerate(projects):
+        with cards[n%3]:
+            with st.container(border=True):
+                st.markdown('**'+escape(p['title'])+'**')
+                st.caption((p.get('client_name') or 'Empresa não informada')+' · '+(p.get('location') or 'Local não informado'))
+                st.caption('Previsão: '+pretty_date(p.get('target_date')))
+                if st.button('Abrir painel',key='choose_project_'+p['id'],use_container_width=True):
+                    st.session_state['project_id']=p['id']
+                    st.session_state['page']='Dashboard'
+                    st.rerun()
 
 
 def task_snapshot(project_id):
@@ -202,39 +200,93 @@ def get_task_label(task,stage_names):
 
 
 def dashboard(project,stages,tasks,entries,docs):
-    st.subheader("Visão geral do empreendimento")
+    st.markdown('<div class="co-eyebrow">CENTRAL DE INTELIGÊNCIA DO EMPREENDIMENTO</div>',unsafe_allow_html=True)
+    st.subheader('Painel executivo')
     stats=brief_stats(tasks,entries)
     today=date.today()
     overdue=[t for t in tasks if t['status']!='Concluída' and t.get('due_date') and date_value(t['due_date'])<today]
-    metrics=st.columns(5)
-    for col,(label,value) in zip(metrics,[
-        ("Tarefas",str(stats['total'])),("Concluídas",str(stats['closed'])),
-        ("Avanço físico médio",f"{stats['progress']:.1f}%"),("Atrasadas",str(len(overdue))),
-        ("Orçamento estimado",brl(stats['budget']))]):
-        with col:st.metric(label,value)
-    st.progress(min(100,int(stats['progress'])))
-    left,right=st.columns([1.25,1])
-    with left:
-        st.markdown("#### Progresso por etapa")
+    # Considera o checklist documental associado ao roteiro de implantação.
+    found_docs=[]
+    for t in tasks:
+        spec=BY_CODE.get(code_for_task(t))
+        if spec:
+            own=[d for d in docs if d['task_id']==t['id']]
+            found_docs.extend(checklist_doc_status(spec,own))
+    docs_ok=sum(done for _,done in found_docs)
+    doc_total=len(found_docs)
+    doc_pending=doc_total-docs_ok
+    kpis=[
+        ('Tarefas do projeto',str(stats['total']),'check','Roteiro de implantação','teal'),
+        ('Avanço geral',f"{stats['progress']:.1f}%",'progress','Execução das atividades','teal'),
+        ('Atividades atrasadas',str(len(overdue)),'alert','Prazos vencidos','danger'),
+        ('Documentos pendentes',str(doc_pending),'files',f'{docs_ok}/{doc_total} requisitos recebidos','gold'),
+        ('Orçamento estimado',brl(stats['budget']),'wallet','Soma dos custos das tarefas','teal'),
+        ('Financeiro planejado',brl(stats['planned']),'calendar','Parcelas lançadas','teal'),
+        ('Financeiro realizado',brl(stats['paid']),'chart','Pagamentos registrados','teal'),
+        ('Tarefas concluídas',str(stats['closed']),'dashboard','Etapas finalizadas','teal'),
+    ]
+    for offset in (0,4):
+        html=''.join(metric_card(*item) for item in kpis[offset:offset+4])
+        st.markdown('<div class="co-kpi-row">'+html+'</div>',unsafe_allow_html=True)
+    a,b=st.columns([1.1,1],gap='medium')
+    with a:
+        st.markdown('<div class="co-section">Situação das tarefas</div>',unsafe_allow_html=True)
+        summary=pd.DataFrame([{'Situação':s,'Quantidade':sum(t['status']==s for t in tasks)} for s in STATUS])
+        summary=summary[summary['Quantidade']>0]
+        if not summary.empty:
+            fig=px.pie(summary,names='Situação',values='Quantidade',hole=.7,
+                color='Situação',color_discrete_map={'A fazer':'#96aabb','Em andamento':'#087F80',
+                'Em aprovação':'#5487d1','Concluída':'#43a477','Bloqueada':'#c95c61'})
+            fig.update_traces(textposition='outside',textinfo='percent+label',sort=False)
+            fig.update_layout(height=310,margin=dict(t=12,l=12,r=12,b=8),showlegend=False,
+                paper_bgcolor='rgba(0,0,0,0)',font=dict(family='Arial',size=12))
+            st.plotly_chart(fig,use_container_width=True)
+        else:st.info('Nenhuma tarefa no projeto.')
+    with b:
+        st.markdown('<div class="co-section">Progresso por área</div>',unsafe_allow_html=True)
+        by_stage=[]
         for stage in stages:
-            ss=[t for t in tasks if t['stage_id']==stage['id']]
-            done=sum(t['status']=='Concluída' for t in ss)
-            rate=(done/len(ss)) if ss else 0
-            st.write(f"**{stage['name']}** — {done}/{len(ss)} tarefas")
-            st.progress(rate)
-    with right:
-        st.markdown("#### Próximos vencimentos")
-        pending=sorted([t for t in tasks if t['status']!='Concluída'],key=lambda t:t.get('due_date') or '9999-12-31')[:8]
-        if not pending:st.success("Nenhuma tarefa pendente.")
+            stage_tasks=[t for t in tasks if t['stage_id']==stage['id']]
+            p=round(sum(float(t.get('percent_done') or 0) for t in stage_tasks)/len(stage_tasks),1) if stage_tasks else 0.
+            by_stage.append({'Área':stage['name'],'Avanço (%)':p})
+        if by_stage:
+            fig=px.bar(pd.DataFrame(by_stage),x='Avanço (%)',y='Área',orientation='h',text='Avanço (%)',
+                color_discrete_sequence=['#087F80'])
+            fig.update_traces(texttemplate='%{x:.0f}%',textposition='outside',marker_cornerradius=7)
+            fig.update_layout(height=310,xaxis_range=[0,110],margin=dict(l=5,r=35,t=16,b=8),
+                showlegend=False,paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig,use_container_width=True)
+    a,b=st.columns([1.2,1],gap='medium')
+    with a:
+        st.markdown('<div class="co-section">Fluxo financeiro · planejado x pago</div>',unsafe_allow_html=True)
+        monthly=defaultdict(lambda:{'Planejado':0.0,'Realizado':0.0})
+        for e in entries:
+            monthly[str(e['planned_date'])[:7]]['Planejado']+=float(e.get('planned_amount') or 0)
+            if e.get('status')=='Pago':
+                monthly[str(e.get('paid_date') or e['planned_date'])[:7]]['Realizado']+=float(e.get('paid_amount') or 0)
+        if monthly:
+            rows=[{'Mês':m,'Tipo':k,'Valor':v} for m,data in sorted(monthly.items()) for k,v in data.items()]
+            fig=px.bar(pd.DataFrame(rows),x='Mês',y='Valor',color='Tipo',barmode='group',
+                color_discrete_map={'Planejado':'#087F80','Realizado':'#dca64b'})
+            fig.update_layout(height=308,margin=dict(t=15,l=5,r=5,b=8),legend_title_text='',
+                paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig,use_container_width=True)
+        else:st.info('Registre parcelas nas tarefas para acompanhar o fluxo de caixa.')
+    with b:
+        st.markdown('<div class="co-section">Agenda e prazos prioritários</div>',unsafe_allow_html=True)
+        pending=sorted([t for t in tasks if t['status']!='Concluída'],key=lambda t:t.get('due_date') or '9999-12-31')[:5]
         for t in pending:
             with st.container(border=True):
-                st.write(f"**{t['title']}**")
-                st.caption(f"{pretty_date(t.get('due_date'))} · {t['status']}")
-                if st.button("Abrir tarefa",key=f"open_pending_{t['id']}"):
-                    open_task(t['id'])
-    if overdue:st.warning(f"Há {len(overdue)} tarefa(s) com prazo vencido. Consulte o quadro e o cronograma.")
-    st.markdown("#### Acesso rápido a relatórios")
-    export_buttons(project,stages,tasks,entries,docs)
+                c1,c2=st.columns([4,1])
+                with c1:
+                    st.markdown('**'+escape(t['title'])+'**')
+                    st.caption(pretty_date(t.get('due_date'))+' · '+t['status'])
+                with c2:
+                    if st.button('Abrir',key=f'next_{t["id"]}'):
+                        open_task(t['id'])
+        if not pending:st.success('Sem pendências de execução.')
+    if overdue:
+        st.warning(f'{len(overdue)} tarefa(s) com prazo vencido. Abra o quadro de tarefas para tratar.')
 
 
 def export_buttons(project,stages,tasks,entries,docs):
@@ -245,7 +297,7 @@ def export_buttons(project,stages,tasks,entries,docs):
             extras = {'detail_map':get_detail_map(current_client(),project['id']),
                       'milestones':get_milestones(current_client(),project['id'])}
         except Exception:
-            st.caption('Relatório do modelo novo indisponível até aplicar a migração v0.1.3. O relatório anterior permanece utilizável.')
+            st.caption('Relatório detalhado indisponível até aplicar o SQL de atualização. O relatório anterior permanece utilizável.')
         with c1:
             st.download_button("📄 Baixar relatório PDF",pdf_report(project,stages,tasks,entries,docs,**extras),
               file_name="relatorio_cronograma.pdf",mime="application/pdf",use_container_width=True)
@@ -272,7 +324,7 @@ def kanban(project_id,stages,tasks,docs,can_edit,team):
     st.subheader("Quadro de tarefas")
     c1,c2,c3=st.columns([1.2,1.2,1.1])
     stage_names={s['id']:s['name'] for s in stages}
-    with c1:stage_filter=st.selectbox("Órgão / etapa",['Todos']+[s['name'] for s in stages])
+    with c1:stage_filter=st.selectbox("Área / etapa",['Todos']+[s['name'] for s in stages])
     with c2:search=st.text_input("Buscar tarefa",placeholder="projeto, licença, aprovação...")
     with c3:
         if can_edit and st.button("➕ Nova tarefa",type='primary',use_container_width=True):
@@ -333,7 +385,7 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team):
             r1,r2,r3=st.columns(3)
             with r1:
                 org_idx=next((i for i,s in enumerate(stages) if s['id']==task['stage_id']),0)
-                stage=st.selectbox('Órgão / fase',stages,index=org_idx,format_func=lambda s:s['name'],disabled=not can_edit)
+                stage=st.selectbox('Área / fase',stages,index=org_idx,format_func=lambda s:s['name'],disabled=not can_edit)
                 status=st.selectbox('Situação',STATUS,index=STATUS.index(task['status']),disabled=not can_edit)
                 priority=st.selectbox('Prioridade',PRIORITY,index=PRIORITY.index(task['priority']),disabled=not can_edit)
             with r2:
@@ -365,12 +417,12 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team):
         try:
             details=current_client().table('task_details').select('*').eq('task_id',task['id']).limit(1).execute().data or []
             technical_form(current_client(),project_id,task,can_edit,details[0] if details else None)
-        except Exception as exc:fail(exc,'Aplique a migração SQL v0.1.3 para habilitar as fichas técnicas')
+        except Exception as exc:fail(exc,'Execute o SQL de atualização do Supabase para habilitar as fichas técnicas')
     elif pane=='Checklist':show_checklist(project_id,task,can_edit)
     elif pane=='Financeiro':show_finance_task(project_id,task,can_edit)
     elif pane=='Execução':
         try:execution_detail(current_client(),project_id,task,can_edit)
-        except Exception as exc:fail(exc,'Aplique a migração SQL v0.1.3 para habilitar as atividades de execução')
+        except Exception as exc:fail(exc,'Execute o SQL de atualização do Supabase para habilitar as atividades de execução')
     elif pane=='Anexos':attachments(project_id,task,related_docs,can_edit)
     elif pane=='Comentários':comments(project_id,task,team)
 
@@ -452,7 +504,7 @@ def attachments(project_id,task,docs,can_edit):
     code=code_for_task(task)
     spec=BY_CODE.get(code)
     if spec:
-        st.markdown('**Documentação conforme PROJETO X**')
+        st.markdown('**Documentos previstos para a etapa**')
         for category,found in checklist_doc_status(spec,docs):
             st.caption(('✅' if found else '⬜')+' '+category)
     st.caption('PDF, imagens (PNG/JPG/WEBP), Excel (XLS/XLSX/XLSM), CSV, Word, DWG, DXF, ZIP e TXT. Até 25 MB por arquivo.')
@@ -515,7 +567,7 @@ def comments(project_id,task,team):
 
 
 def execution_schedule(stages,tasks):
-    st.subheader('Cronograma de execução · Gantt')
+    st.subheader('Planejamento físico · Gantt')
     stage_names={s['id']:s['name'] for s in stages}
     rows=[]
     for t in tasks:
@@ -633,15 +685,26 @@ def team_management(project,team):
         except Exception as exc:fail(exc,'Não foi possível incluir colaborador')
 
 
+def reports_page(project,stages,tasks,entries,docs):
+    st.title('Central de relatórios')
+    st.caption('Exportação gerencial da execução, fichas técnicas, pagamentos e inventário documental.')
+    stats=brief_stats(tasks,entries)
+    a,b,c=st.columns(3)
+    a.metric('Atividades',stats['total'])
+    b.metric('Conclusão',f"{stats['progress']:.1f}%")
+    c.metric('Pago',brl(stats['paid']))
+    st.markdown('#### Relatório do empreendimento')
+    export_buttons(project,stages,tasks,entries,docs)
+    st.caption('O PDF e o Excel trazem os dados cadastrados. Para cópia recuperável com os arquivos originais, utilize Backups.')
+
+
 def run():
-    if not current_client():login_page();return
+    if not current_client():
+        login_page()
+        return
     try:
-        # A sessão autenticada fica no servidor por sessão Streamlit. A API de dados
-        # aplica o JWT com RLS; verificar em Auth periodicamente evita chamada extra
-        # em cada clique na interface.
         auth_session=current_client().auth.get_session()
-        if not auth_session:
-            raise RuntimeError('Sessão inválida')
+        if not auth_session:raise RuntimeError('Sessão inválida')
         last=st.session_state.get('last_auth_validation')
         if last is None or (datetime.now()-last).total_seconds()>600:
             verified=current_client().auth.get_user()
@@ -649,59 +712,84 @@ def run():
                 raise RuntimeError('Sessão inválida')
             st.session_state['last_auth_validation']=datetime.now()
         projects=api('projects',sort='created_at')
-    except Exception as exc:
+    except Exception:
         st.session_state.pop('supabase_client',None)
         st.session_state.pop('user_id',None)
         st.warning('Sessão expirada ou indisponível. Entre novamente.')
         login_page()
         return
     with st.sidebar:
-        st.markdown('### 🏗️ CronogramaObras')
-        st.caption('Gestão de obras e licenças · v0.1.3 PROJETO X')
+        st.markdown('<div style="display:flex;align-items:center;gap:12px;margin:10px 0 8px">'
+            +icon('building','#79dfd4',34)+'<div><div style="font-size:1.25rem;font-weight:800">CronogramaObras</div>'
+            '<div style="font-size:.73rem;color:#a4c5d0">Cloud · Gestão de empreendimentos</div></div></div>',
+            unsafe_allow_html=True)
+        st.caption('Versão 0.1.4 · Gestão integrada')
         if st.button('Sair da conta',use_container_width=True):
             try:current_client().auth.sign_out()
             except Exception:pass
-            for key in ['supabase_client','user_id','user_email','project_id','selected_task_id']:
+            for key in ['supabase_client','user_id','user_email','project_id','selected_task_id','backup_bytes']:
                 st.session_state.pop(key,None)
             st.rerun()
         if projects:
             choices={p['id']:p['title'] for p in projects}
             previous=st.session_state.get('project_id')
             if previous not in choices:previous=projects[0]['id']
-            project_id=st.selectbox('Projeto em acompanhamento',list(choices),
+            project_id=st.selectbox('Empreendimento ativo',list(choices),
                 index=list(choices).index(previous),format_func=lambda x:choices[x])
             if st.session_state.get('project_id')!=project_id:
                 st.session_state['project_id']=project_id
                 st.session_state['selected_task_id']=None
         else:project_id=None
-        page=st.radio('Navegação',NAV,index=NAV.index(st.session_state.get('page','Visão geral'))
-                     if st.session_state.get('page','Visão geral') in NAV else 0)
-        st.session_state['page']=page
+        st.markdown('<div class="co-eyebrow" style="color:#7bd5ca;margin:18px 0 6px">NAVEGAÇÃO</div>',unsafe_allow_html=True)
+        page=st.session_state.get('page','Dashboard')
+        for label in NAV:
+            row=st.columns([.16,.84],vertical_alignment='center',gap='small')
+            with row[0]:st.markdown(icon(NAV_ICONS[label],'#72cec7' if page==label else '#a8c1c9',20),unsafe_allow_html=True)
+            with row[1]:
+                if st.button(label,key='nav_'+label,type='primary' if page==label else 'secondary',use_container_width=True):
+                    st.session_state['page']=label
+                    st.rerun()
+        if st.button('＋ Novo projeto',type='primary',use_container_width=True,key='sidebar_new'):
+            st.session_state['page']='Novo projeto';st.rerun()
         st.divider()
-        st.caption('Documentos privados • dados protegidos por permissões do projeto')
-    if page=='Novo projeto' or not projects:
+        st.caption('Acesso individual · Supabase RLS · documentos privados')
+    page=st.session_state.get('page','Dashboard')
+    if page=='Backups':
+        backup_page(current_client(),projects,st.session_state['user_id'])
+        return
+    if page=='Novo projeto' or (not projects and page not in ('Projetos','Backups')):
         show_new_project()
+        return
+    if page=='Projetos':
+        show_projects(projects)
+        return
+    if not projects:
+        show_projects([])
         return
     project=next(p for p in projects if p['id']==project_id)
     try:
         stages,tasks,entries,docs=task_snapshot(project_id)
         team=members(current_client(),project_id)
     except Exception as exc:
-        fail(exc,'Não foi possível carregar os dados do projeto');return
-    myrole=next((m['role'] for m in team if m['user_id']==st.session_state['user_id']), 'viewer')
+        fail(exc,'Não foi possível carregar os dados do projeto')
+        return
+    myrole=next((m['role'] for m in team if m['user_id']==st.session_state['user_id']),
+                'owner' if project.get('owner_id')==st.session_state['user_id'] else 'viewer')
     can_edit=myrole in ('owner','editor')
     top_banner(project)
-    if page=='Visão geral':dashboard(project,stages,tasks,entries,docs)
-    elif page=='Plano PROJETO X':
+    if page=='Dashboard':dashboard(project,stages,tasks,entries,docs)
+    elif page=='Etapas':
         try:
             detail_map=get_detail_map(current_client(),project_id)
             milestones=get_milestones(current_client(),project_id)
             overview_plan(current_client(),project_id,stages,tasks,docs,detail_map,entries,milestones,can_edit)
-        except Exception as exc:fail(exc,'Para usar o plano PROJETO X execute a migração v0.1.3 no Supabase')
+        except Exception as exc:
+            fail(exc,'Verifique se a atualização das tabelas técnicas foi aplicada no Supabase')
     elif page=='Quadro de tarefas':kanban(project_id,stages,tasks,docs,can_edit,team)
     elif page=='Cronograma':execution_schedule(stages,tasks)
     elif page=='Financeiro':finance_dashboard(tasks,entries)
     elif page=='Documentos':all_documents(project_id,stages,tasks,docs)
     elif page=='Equipe':team_management(project,team)
+    elif page=='Relatórios':reports_page(project,stages,tasks,entries,docs)
 
 if __name__=='__main__':run()

@@ -86,8 +86,8 @@ def pdf_report(project: dict, stages: list, tasks: list, entries: list, docs: li
         d.append([x['category'],x['filename'],task_names.get(x['task_id'],'-'),pretty_date(x.get('uploaded_at'))])
     _table(story,d,[112,293,283,74],styles)
     if detail_map:
-        from src.project_x import code_for_task, BY_CODE
-        story += [Paragraph('Fichas técnicas · modelo PROJETO X', styles['Sec'])]
+        from src.workflow import code_for_task, BY_CODE
+        story += [Paragraph('Fichas técnicas · controle técnico', styles['Sec'])]
         field_rows=[['Item','Projeto / documentação','Campos registrados']]
         for t in tasks:
             record=detail_map.get(t['id']) or {}
@@ -132,7 +132,7 @@ def xlsx_report(project, stages, tasks, entries, docs, detail_map=None, mileston
     head=wb.add_format({'bold':True,'font_color':'#FFFFFF','bg_color':'#0F766E','border':0,'text_wrap':True})
     money=wb.add_format({'num_format':'R$ #,##0.00'})
     pct=wb.add_format({'num_format':'0"%"'})
-    for sheet_name in ['Resumo','Execução','Financeiro','Documentos','Fichas PROJETO X','Atividades']:
+    for sheet_name in ['Resumo','Execução','Financeiro','Documentos','Fichas Técnicas','Atividades']:
         ws=wb.add_worksheet(sheet_name)
         ws.set_tab_color('#0F766E')
         ws.hide_gridlines(2)
@@ -174,7 +174,7 @@ def xlsx_report(project, stages, tasks, entries, docs, detail_map=None, mileston
         [d['category'],d['filename'],task_names.get(d['task_id'],''),d['size_bytes'],d['uploaded_at'][:19]] for d in docs],
         [19,55,48,23,23])
     if detail_map:
-        from src.project_x import code_for_task, BY_CODE
+        from src.workflow import code_for_task, BY_CODE
         field_rows=[]
         for t in tasks:
             rec=detail_map.get(t['id']) or {}
@@ -185,9 +185,9 @@ def xlsx_report(project, stages, tasks, entries, docs, detail_map=None, mileston
             for key,val in details.items():
                 field_rows.append([code,spec['name'],key,str(val or ''),t.get('status','')])
             if not details:field_rows.append([code,spec['name'],'Pendente','',t.get('status','')])
-        section('Fichas PROJETO X',['Item','Área','Campo','Valor','Situação'],field_rows,[12,35,35,66,20])
+        section('Fichas Técnicas',['Item','Área','Campo','Valor','Situação'],field_rows,[12,35,35,66,20])
     else:
-        section('Fichas PROJETO X',['Item','Área','Campo','Valor','Situação'],[],[12,35,35,66,20])
+        section('Fichas Técnicas',['Item','Área','Campo','Valor','Situação'],[],[12,35,35,66,20])
     section('Atividades',['Tarefa','Atividade','Início','Fim','Avanço (%)','Situação'],[
         [task_names.get(m['task_id'],'-'),m['title'],m['start_date'],m['due_date'],
          m['percent_done'],m['status']] for m in (milestones or [])],

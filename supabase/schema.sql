@@ -478,8 +478,8 @@ grant execute on function public.create_project_workflow(jsonb,jsonb) to authent
 notify pgrst, 'reload schema';
 
 
--- =================== MODELO PROJETO X (v0.1.3) ===================
--- CronogramaObras Cloud v0.1.3 · modelo PROJETO X.pdf
+-- =================== MODELO ROTEIRO PADRÃO (v0.1.3) ===================
+-- CronogramaObras Cloud v0.1.3 · modelo ROTEIRO PADRÃO.pdf
 -- IMPORTANTE: execute após o SQL da versão 0.1.2, uma única vez no SQL Editor.
 -- A migração é repetível e preserva projetos, usuários, anexos e cronogramas.
 -- Mantém RLS ativo e o proprietário vinculado ao JWT autenticado.
@@ -726,7 +726,7 @@ begin
         v_code := v_row->>'template_code';
         if v_code not in ('1.1','1.2','1.3','2.1','2.2','2.3','2.4','2.5',
                           '2.6','2.7','2.8','2.9','2.10') then
-            raise exception 'Código não reconhecido no modelo PROJETO X.';
+            raise exception 'Código não reconhecido no modelo ROTEIRO PADRÃO.';
         end if;
         if exists(select 1 from public.task_details d
             where d.project_id = p_project_id and d.template_code = v_code) then
