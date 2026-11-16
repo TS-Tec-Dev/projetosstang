@@ -9,7 +9,7 @@ BUCKET = "project-files"
 MAX_FILE_BYTES = 25 * 1024 * 1024
 ALLOWED_EXTENSIONS = {
     ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".xlsx", ".xls", ".xlsm",
-    ".csv", ".doc", ".docx", ".dwg", ".dxf", ".zip", ".txt",
+    ".csv", ".doc", ".docx", ".dwg", ".dxf", ".zip", ".txt", ".kml",
 }
 
 
@@ -98,16 +98,19 @@ def remove_document(client, doc: dict):
     client.storage.from_(BUCKET).remove([doc["storage_path"]])
 
 
-def members(client, project_id):
-    rows = query(client, "project_members", project_id)
-    ids = [r["user_id"] for r in rows]
-    if not ids:
-        return []
-    profiles = client.table("profiles").select("id,full_name,email").in_("id", ids).execute().data or []
-    lookup = {p["id"]: p for p in profiles}
-    for row in rows:
-        row["profile"] = lookup.get(row["user_id"], {})
-    return rows
+def my_role(client):
+    response = client.rpc("my_platform_role").execute()
+    role = response.data
+    if role not in ("admin", "standard", "viewer"):
+        raise RuntimeError("Perfis globais não configurados. Execute a migração SQL v0.1.5 no Supabase.")
+    return role
+
+
+def members(client, project_id=None):
+    """Diretório global: responsáveis disponíveis em todos os empreendimentos."""
+    records = client.rpc("team_directory").execute().data or []
+    return [{"user_id": r["user_id"], "role": r["platform_role"],
+             "profile": {"full_name": r["full_name"]}} for r in records]
 
 
 from src.utils import brl, pretty_date

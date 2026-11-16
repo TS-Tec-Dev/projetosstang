@@ -1,44 +1,37 @@
-# CronogramaObras Cloud · v0.1.4
+# CronogramaObras Cloud v0.1.5 — Gestão Compartilhada
 
-Sistema de gestão de empreendimentos, documentação, projetos técnicos, cronograma físico e financeiro, anexos, equipe, relatórios e backups. Implementado em **Streamlit + Supabase PostgreSQL (Auth/RLS/Storage)**.
+Sistema Streamlit + Supabase. O roteiro de implantação segue as seções **Documentação (1.1 a 1.3)** e **Projetos Técnicos (2.1 a 2.10)**, com painel gerencial, Gantt, custos, tarefas, anexos, equipe, relatórios e backup. A interface não usa o nome do documento que originou o roteiro.
 
-## Estrutura principal do cronograma
+## Alterações desta versão
 
-O roteiro utilizado foi elaborado a partir de um documento de referência de duas páginas. Ele passou a ser a **estrutura única padrão** de novos projetos, sem reutilizar as antigas etapas por órgãos ou mostrar o nome do documento original como módulo.
+- **1.0 Localização do empreendimento:** antes de 1.1 Matrícula, anexar KML do Google Earth (até 10 MB), visualizar pontos, linhas e polígonos no mapa e abrir/baixar o original. O KML fica arquivado como documento privado vinculado à Matrícula; arquivos com recursos não suportados continuam disponíveis para abrir no Google Earth.
+- **Navegação:** removida a aba Projetos; selecionar o empreendimento apenas em **Empreendimento ativo**, com cores de texto e de fundo corrigidas. Novo empreendimento tem botão separado para Administradores e usuários Padrão.
+- **Compartilhamento:** todos os usuários autenticados veem todos os projetos, suas etapas, tarefas e documentos; o repositório GitHub não recebe arquivos do Supabase.
+- **Perfis globais:** Administrador (cria, edita, define funções de usuários, restaura backups e exclui qualquer projeto); Padrão (cria, edita, envia anexos); Visualizador (somente leitura, mapa, relatórios e download de anexos). **Novas contas entram como Visualizador** até aprovação por um Administrador.
+- **Segurança:** o RLS permanece ativo no banco e no Storage privado; os botões também respeitam as permissões. Chaves privadas/service_role não fazem parte do aplicativo.
+- **Backups:** exportação, restauração e exclusão somente para administradores. Antes de excluir, baixe e confira uma cópia de segurança.
 
-**1. Documentação:** 1.1 Matrícula (número, proprietário, área e anexos); 1.2 Proprietário do Empreendimento (nome, CNPJ, documentos); 1.3 Contratos e Consultas (locação e viabilidade: Prefeitura, Meio Ambiente, Junta Comercial).
+## Atualizar instalação existente (passo a passo)
 
-**2. Projetos:** 2.1 Topografia (retificação sim/não); 2.2 Arquitetônico; 2.3 Hidrossanitário; 2.4 Projeto Preventivo; 2.5 Projeto Ambiental; 2.6 EIV (audiência pública sim/não); 2.7 Alvará de Construção; 2.8 Projeto de Acesso (estadual/federal/concessionária); 2.9 LAI, Condicionantes e LAO; 2.10 Habite-se (Prefeitura e Bombeiros). Em cada item técnico há ficha do profissional, orçamento, pagamento, cronograma de execução, checklist, anexos e comentários.
+1. Faça download do backup completo **na versão atual** antes da atualização, se possível.
+2. Supabase → **SQL Editor**: execute `supabase/migrations/20261116_global_roles_kml.sql`. Não execute `schema.sql` sobre o banco existente apenas para aplicar esta versão. O script não apaga tabelas/projetos.
+3. **Obrigatório:** atribua o primeiro administrador manualmente no SQL Editor usando `supabase/PRIMEIRO_ADMINISTRADOR.sql`. Substitua `SEU_EMAIL_CADASTRADO@EXEMPLO.COM` pelo e-mail real da conta já criada e confira o resultado. **Até fazer isso, todos os usuários existentes terão nível Visualizador** (por segurança).
+4. GitHub: atualize o código do repositório `TS-Tec-Dev/projetosstang` com os arquivos deste ZIP. **Não envie `.streamlit/secrets.toml`**.
+5. Streamlit: Secrets continuam com `SUPABASE_URL` e `SUPABASE_ANON_KEY`; faça Reboot e entre novamente.
+6. Em **Equipe**, o Administrador define outros administradores, usuários Padrão ou Visualizadores. Em **Backups**, o Administrador tem a opção de excluir qualquer projeto com confirmação.
 
-## Interface
+### Primeira instalação
 
-- Dashboard executivo com **8 KPIs** e gráficos de status, progresso físico por área e fluxo financeiro mensal.
-- Sidebar com ícones vetoriais originais em `assets/icons/`, tema corporativo claro e barra lateral em azul-petróleo.
-- Portfólio de Projetos, Etapas detalhadas, Quadro de Tarefas, Gantt, Financeiro, Documentos, Equipe, Relatórios, Backups.
-- Exportação gerencial em PDF/XLSX e suporte a arquivos PDF, imagens, Excel, Word, DWG/DXF, ZIP e TXT.
-- Login Supabase, permissões proprietário/editor/leitor e RLS ativo.
+Execute **somente** `supabase/schema.sql` (que já inclui a migração global) e depois `supabase/PRIMEIRO_ADMINISTRADOR.sql`. Copie `.streamlit/secrets.toml.example` para `.streamlit/secrets.toml` local, não publique secrets no GitHub. Inicie `streamlit run app.py`.
 
-**Nota técnica:** o limite de upload HTTP do Streamlit é 225 MB apenas para permitir restaurar ZIPs completos. Cada anexo individual continua limitado pelo código e pelo Supabase a 25 MB.
+### Segurança e limites
 
-## Backup e recuperação
+- O acesso compartilhado significa que **todos os usuários autenticados** conseguem ver projetos e arquivos. Cadastros no Supabase devem ser controlados pela organização. Se não quiser permitir autoinscrição, desative o cadastro público no painel **Authentication** e convide contas por processo administrativo.
+- Backup completo contém informações e anexos; guarde seus ZIPs em local protegido. Visualizadores podem baixar anexos conforme solicitado.
+- KML: somente `.kml`, não `.kmz`; o visualizador interno mostra geometria simples, não conteúdo 3D, modelos e overlays. O original pode ser aberto no Google Earth.
+- Tabelas, documentos e usuários existentes não são excluídos pela migração. Rótulos antigos de etapas são normalizados quando não houver conflito de nomes.
+- Não foi executado teste integrado no banco Supabase real. Valide as três permissões usando contas separadas após implantação.
 
-A aba **Backups** permite criar ZIP com registros + anexos privados para baixar, restaurar como novas cópias com IDs próprios e eliminar projetos antigos com confirmação. Sem chaves administrativas; RLS continua ativo. Perfis do Auth, permissões antigas de equipe e responsáveis de outros usuários não são importados; o usuário que restaura é o novo proprietário. Cada backup deve ser guardado fora do Streamlit.
-
-## Implantação
-
-Leia `ATUALIZAR_v0.1.4.md` para atualizar a instalação existente com segurança. Para instalação nova, execute `supabase/schema.sql` no Supabase, copie `.streamlit/secrets.toml.example` para `.streamlit/secrets.toml` localmente (não enviar ao GitHub), configure o Streamlit Cloud e rode `streamlit run app.py`.
-
-Secrets necessários:
-
-```toml
-SUPABASE_URL = "https://SEU-PROJETO.supabase.co"
-SUPABASE_ANON_KEY = "SUA_CHAVE_PUBLICA_ANON_OU_PUBLISHABLE"
-```
-
-**Importante:** senhas/chaves privadas nunca devem ir para o GitHub; não use `service_role` no Streamlit. As datas de tarefa são estimativas editáveis, não prazos oficiais de órgãos licenciadores.
-
-## Testes locais
+### Verificação local
 
 `python -m pytest -q`
-
-Testes cobrem a criação do roteiro principal, estrutura documental, SVGs originais, exportadores PDF/XLSX, regras SQL e verificação de arquivo ZIP de backup. Os testes não substituem integração e testes com dados reais no Supabase.

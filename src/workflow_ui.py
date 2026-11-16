@@ -7,6 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.db import brl, pretty_date
+from src.location_ui import location_kml_panel
 from src.workflow import BY_CODE, SPECIFICATIONS, PROJECT_SECTION, DOC_SECTION, code_for_task, checklist_doc_status, make_template_rows, DEFAULT_SECTION_NAMES
 
 OPTIONS = ['A definir', 'Pendente', 'Em andamento', 'Protocolado', 'Aprovado', 'Concluído', 'Não se aplica']
@@ -32,7 +33,7 @@ def open_task_panel(task: dict, panel: str):
     st.rerun()
 
 
-def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries, milestones, can_edit):
+def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries, milestones, can_edit, user_id):
     st.subheader('Plano do empreendimento · Cronograma do empreendimento')
     st.caption('Roteiro técnico: 1.1–1.3 (Documentação) e 2.1–2.10 (Projetos). Os prazos são editáveis, não são prazos legais dos órgãos.')
     by_stage = {s['id']:s['name'] for s in stages}
@@ -47,7 +48,7 @@ def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries
         if can_edit and st.button('Adicionar etapas técnicas faltantes',type='primary'):
             try:
                 payload=make_template_rows(date.today(),DEFAULT_SECTION_NAMES)
-                result=sb.rpc('add_project_x_to_existing',{'p_project_id':project_id,'p_tasks':payload}).execute()
+                result=sb.rpc('add_missing_workflow_steps',{'p_project_id':project_id,'p_tasks':payload}).execute()
                 st.success(f'Itens incluídos: {result.data}. Os projetos e documentos anteriores foram mantidos.')
                 st.rerun()
             except Exception as exc:
@@ -67,6 +68,8 @@ def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries
         group = [(s,t) for s,t in tagged if s['section'] == section]
         if not group:continue
         st.markdown(f'### {section}')
+        if section==DOC_SECTION:
+            location_kml_panel(sb,project_id,tasks,documents,can_edit,user_id)
         for spec,t in group:
             related_docs=[d for d in documents if d['task_id']==t['id']]
             documented=sum(ok for _,ok in checklist_doc_status(spec,related_docs))

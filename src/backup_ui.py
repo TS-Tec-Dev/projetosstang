@@ -1,13 +1,18 @@
-"""Página Backups: exportar, restaurar e limpar projetos sob autorização do proprietário."""
+"""Backups administrativos: exportar, restaurar e excluir empreendimentos."""
 from datetime import datetime
 import streamlit as st
 from src.backups import make_backup, inspect_backup, restore_backup, purge_project
 
 
-def backup_page(sb, projects, user_id):
+def backup_page(sb, projects, user_id, myrole):
+    if myrole!='admin':
+        st.error('Área exclusiva dos administradores.')
+        return
     st.title('Backups e recuperação')
     st.caption('Proteja dados e anexos antes de atualizar o aplicativo. O ZIP é gerado nesta sessão e baixado para seu computador; não fica salvo no GitHub.')
-    tab_save,tab_restore,tab_clear=st.tabs(['Exportar backup','Restaurar backup','Excluir projetos antigos'])
+    pages=['Exportar backup','Restaurar backup','Excluir projetos antigos'] if myrole=='admin' else ['Exportar backup']
+    tabs=st.tabs(pages)
+    tab_save=tabs[0]
     with tab_save:
         st.markdown('#### Criar cópia de segurança')
         options={p['id']:p for p in projects}
@@ -28,6 +33,9 @@ def backup_page(sb, projects, user_id):
                 file_name=f'cronogramaobras_backup_{datetime.now():%Y%m%d_%H%M}.zip',
                 mime='application/zip',use_container_width=True)
             st.caption('Guarde o ZIP em local seguro. Ele contém dados internos e arquivos do empreendimento.')
+    if myrole!='admin':
+        return
+    tab_restore,tab_clear=tabs[1:]
     with tab_restore:
         st.markdown('#### Restaurar como novo projeto')
         st.caption('A restauração não substitui nem altera os projetos existentes; cria novas cópias com IDs próprios. Membros antigos não são reativados automaticamente.')
@@ -57,9 +65,9 @@ def backup_page(sb, projects, user_id):
     with tab_clear:
         st.markdown('#### Limpeza de projetos antigos')
         st.warning('A exclusão é permanente no Supabase, inclusive os anexos. Faça e baixe um backup integral ANTES desta operação.')
-        owned={p['id']:p for p in projects if p.get('owner_id')==user_id}
+        owned={p['id']:p for p in projects}
         if not owned:
-            st.info('Não há projetos de sua propriedade disponíveis para exclusão.')
+            st.info('Não há empreendimentos disponíveis para exclusão.')
             return
         ids=st.multiselect('Quais projetos excluir?',list(owned.keys()),format_func=lambda pid:owned[pid]['title'],key='projects_to_delete')
         phrase=st.text_input('Digite EXCLUIR para autorizar',key='delete_phrase')

@@ -54,6 +54,8 @@ class _Client:
                        'content_type':'application/pdf'}]}
         self.storage=_Storage()
     def table(self,table):return _Query(self._data.get(table,[]))
+    def rpc(self,*args,**kwargs):return self
+    def execute(self):return _Response('admin')
 
 
 def test_complete_backup_carries_private_bytes_and_manifest():

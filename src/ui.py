@@ -16,6 +16,7 @@ _PATHS = {
  'backup':'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M12 13v6m-3-3 3 3 3-3M8 3h8"/>',
  'alert':'<path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v5m0 3v.1"/>',
  'progress':'<circle cx="12" cy="12" r="9"/><path d="M12 12 19 7M12 12v-8"/>',
+ 'map':'<path d="M3 5 9 3l6 2 6-2v16l-6 2-6-2-6 2V5Z"/><path d="M9 3v16m6-14v16"/>',
  'building':'<path d="M4 21V6l8-3 8 3v15H4Z"/><path d="M9 8h1m4 0h1M9 12h1m4 0h1M9 16h1m4 0h1M10 21v-4h4v4"/>',
 }
 
@@ -37,6 +38,17 @@ CSS = """
 [data-testid="stAppViewContainer"]{background:linear-gradient(165deg,#f4f8fa 0%,#eef5f6 100%);}
 [data-testid="stSidebar"]{background:#102935!important;border-right:1px solid #244353!important;}
 [data-testid="stSidebar"] *{color:#eaf5f7!important;}
+/* Contraste do seletor de empreendimento: fundo claro + textos escuros (inclusive lista flutuante). */
+[data-testid="stSidebar"] [data-baseweb="select"]>div{background-color:#f8fcff!important;border:1px solid #9db6c2!important;}
+[data-testid="stSidebar"] [data-baseweb="select"] input,
+[data-testid="stSidebar"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-baseweb="select"] [role="combobox"],
+[data-testid="stSidebar"] [data-baseweb="select"] [role="combobox"] *{color:#143143!important;-webkit-text-fill-color:#143143!important;}
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="popover"] [role="option"]{background:#f8fbfd!important;color:#143143!important;}
+[data-baseweb="popover"] [role="option"] *{color:#143143!important;-webkit-text-fill-color:#143143!important;}
+[data-baseweb="popover"] [role="option"]:hover{background:#d8ecee!important;}
+[data-testid="stSidebar"] [data-baseweb="select"] svg{fill:#173e50!important;}
 [data-testid="stSidebar"] .stButton button{background:transparent!important;border:1px solid transparent!important;min-height:40px;text-align:left!important;justify-content:flex-start!important;border-radius:10px!important;}
 [data-testid="stSidebar"] .stButton button:hover{background:#234956!important;border-color:#345965!important;}
 [data-testid="stSidebar"] .stButton button[kind="primary"]{background:#0b817e!important;border-color:#22a5a1!important;}

@@ -95,7 +95,7 @@ def code_for_task(task: dict, details: dict | None = None):
 
 
 def doc_categories():
-    originals = ["Orçamento", "Projeto", "Licença", "Comprovante", "Imagem", "Planilha", "Outro"]
+    originals = ["Orçamento", "Projeto", "Licença", "Comprovante", "Imagem", "Planilha", "Localização KML", "Outro"]
     from_pdf = [d for spec in SPECIFICATIONS for d in spec["docs"]]
     return list(dict.fromkeys(originals + from_pdf))
 

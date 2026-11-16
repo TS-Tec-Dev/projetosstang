@@ -38,6 +38,8 @@ def _fetch_all(sb, table, pid):
 
 def make_backup(sb, projects, include_files=True):
     """Captura tudo do projeto autorizado via RLS, inclusive arquivos de Storage."""
+    if sb.rpc('my_platform_role').execute().data!='admin':
+        raise PermissionError('Somente administradores podem exportar backups completos.')
     if not projects: raise ValueError('Selecione ao menos um projeto.')
     if len(projects)>25: raise ValueError('Limite de 25 projetos por backup.')
     buffer=BytesIO()
@@ -227,6 +229,8 @@ def restore_snapshot(sb, source, zf, owner_id):
 
 
 def restore_backup(sb, raw, owner_id, selected_indices):
+    if sb.rpc('my_platform_role').execute().data!='admin':
+        raise PermissionError('Somente administradores podem restaurar backups.')
     payload=inspect_backup(raw)
     if not payload.get('files_included'):
         raise ValueError('Backup sem arquivos: restauração completa indisponível. Use backup com anexos.')
@@ -240,10 +244,12 @@ def restore_backup(sb, raw, owner_id, selected_indices):
 
 
 def purge_project(sb, project_id, owner_id):
-    """Apaga APENAS um projeto do próprio usuário, junto com arquivos do Storage."""
-    result=sb.table('projects').select('id,owner_id').eq('id',project_id).limit(1).execute().data or []
-    if not result or str(result[0]['owner_id'])!=str(owner_id):
-        raise PermissionError('Somente o proprietário pode excluir este projeto.')
+    """Exclusão administrativa, com checagem de perfil no servidor e RLS na tabela."""
+    role=sb.rpc('my_platform_role').execute().data
+    if role!='admin':
+        raise PermissionError('Somente administradores podem excluir empreendimentos.')
+    result=sb.table('projects').select('id').eq('id',project_id).limit(1).execute().data or []
+    if not result:raise ValueError('Empreendimento não encontrado.')
     # Gatilho do orçamento impede remoção de último orçamento de tarefa concluída.
     # Retorna as tarefas a fazer antes da cascata para não deixar esse bloqueio.
     for t in _fetch_all(sb,'tasks',project_id):

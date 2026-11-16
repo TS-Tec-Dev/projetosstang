@@ -16,7 +16,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.db import (
-    ALLOWED_EXTENSIONS, add_project_with_workflow, brl, delete, insert, members,
+    ALLOWED_EXTENSIONS, add_project_with_workflow, brl, delete, insert, members, my_role,
     new_client, pretty_date, query, remove_document, signed_file_url, update, upload_document,
 )
 from src.reports import brief_stats, pdf_report, xlsx_report
@@ -30,8 +30,8 @@ st.set_page_config(page_title="CronogramaObras Cloud", page_icon=Image.open(Path
 STATUS = ["A fazer", "Em andamento", "Em aprovação", "Concluída", "Bloqueada"]
 PRIORITY = ["Baixa", "Normal", "Alta", "Urgente"]
 CATEGORIES = doc_categories()
-NAV = ["Dashboard", "Projetos", "Etapas", "Quadro de tarefas", "Cronograma", "Financeiro", "Documentos", "Equipe", "Relatórios", "Backups"]
-NAV_ICONS = {"Dashboard":"dashboard", "Projetos":"folder", "Etapas":"check", "Quadro de tarefas":"check", "Cronograma":"calendar", "Financeiro":"wallet", "Documentos":"files", "Equipe":"people", "Relatórios":"chart", "Backups":"backup"}
+NAV = ["Dashboard", "Etapas", "Quadro de tarefas", "Cronograma", "Financeiro", "Documentos", "Equipe", "Relatórios", "Backups"]
+NAV_ICONS = {"Dashboard":"dashboard", "Etapas":"check", "Quadro de tarefas":"check", "Cronograma":"calendar", "Financeiro":"wallet", "Documentos":"files", "Equipe":"people", "Relatórios":"chart", "Backups":"backup"}
 
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -189,6 +189,9 @@ def show_projects(projects):
 
 def task_snapshot(project_id):
     stages=api("stages",project_id,"sort_order",True)
+    for row in stages:
+        if row['name'].lower().startswith(('documentação (','projetos (')):
+            row['name']=row['name'].split(' (',1)[0]
     tasks=api("tasks",project_id,"sort_order",True)
     finance=api("finance_entries",project_id,"planned_date",True)
     docs=api("documents",project_id,"uploaded_at",False)
@@ -424,7 +427,7 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team):
         try:execution_detail(current_client(),project_id,task,can_edit)
         except Exception as exc:fail(exc,'Execute o SQL de atualização do Supabase para habilitar as atividades de execução')
     elif pane=='Anexos':attachments(project_id,task,related_docs,can_edit)
-    elif pane=='Comentários':comments(project_id,task,team)
+    elif pane=='Comentários':comments(project_id,task,team,can_edit)
 
 
 def show_checklist(project_id,task,can_edit):
@@ -547,7 +550,7 @@ def attachments(project_id,task,docs,can_edit):
                     except Exception as exc:fail(exc,'Pré-visualização indisponível')
 
 
-def comments(project_id,task,team):
+def comments(project_id,task,team,can_edit):
     st.markdown('#### Comentários e acompanhamento')
     rows=current_client().table('task_comments').select('*').eq('task_id',task['id']).order('created_at',desc=True).execute().data or []
     names={x['user_id']:x['profile'].get('full_name') or x['profile'].get('email','Equipe') for x in team}
@@ -555,6 +558,9 @@ def comments(project_id,task,team):
         with st.container(border=True):
             st.caption((names.get(item['author_id']) or 'Colaborador')+' · '+item['created_at'][:16].replace('T',' '))
             st.write(item['content'])
+    if not can_edit:
+        st.caption('Seu acesso é de visualização. Comentários são somente leitura.')
+        return
     with st.form('comment_form',clear_on_submit=True):
         message=st.text_area('Registrar atualização / parecer / pendência',max_chars=2000)
         submit=st.form_submit_button('Publicar comentário')
@@ -654,35 +660,37 @@ def all_documents(project_id,stages,tasks,docs):
         except Exception as exc:fail(exc)
 
 
-def team_management(project,team):
-    st.subheader('Equipe e permissões')
-    st.caption('Somente o proprietário pode adicionar colaboradores. O novo usuário precisa estar cadastrado no sistema.')
-    for m in team:
-        p=m['profile']
-        left,right=st.columns([7,2])
-        with left:
-            st.write(f"**{p.get('full_name') or p.get('email') or m['user_id']}** — {m['role']}")
-            st.caption(p.get('email',''))
-        with right:
-            if project['owner_id']==st.session_state['user_id'] and m['role'] != 'owner':
-                if st.button('Remover acesso',key=f"member_remove_{m['user_id']}"):
-                    try:
-                        current_client().table('project_members').delete().eq('project_id',project['id']).eq('user_id',m['user_id']).execute()
-                        st.rerun()
-                    except Exception as exc:fail(exc,'Não foi possível remover a pessoa')
-    if project['owner_id'] != st.session_state['user_id']:
-        st.info('Você não é o proprietário deste projeto.');return
-    with st.form('add_member'):
-        email=st.text_input('E-mail de colaborador já cadastrado')
-        role=st.selectbox('Perfil de acesso',['editor','viewer'],format_func=lambda x:
-           {'editor':'Editor: altera tarefas e documentos','viewer':'Leitor: acompanha o projeto'}[x])
-        send=st.form_submit_button('Adicionar à equipe',type='primary')
-    if send:
+def team_management(myrole, team):
+    st.subheader('Equipe e níveis de acesso')
+    st.caption('Os empreendimentos e etapas são compartilhados entre todos os usuários autenticados. A edição depende do perfil global.')
+    names={'admin':'Administrador · acesso total e exclusão',
+           'standard':'Padrão · cria e edita', 'viewer':'Visualizador · consulta e baixa arquivos'}
+    if myrole!='admin':
+        st.info('Somente administradores podem conceder ou alterar permissões de usuários.')
+        st.dataframe([{'Colaborador':m['profile'].get('full_name') or 'Colaborador',
+                       'Acesso':names.get(m['role'],m['role'])} for m in team],
+                      hide_index=True,use_container_width=True)
+        return
+    try:
+        rows=current_client().table('profiles').select('id,full_name,email,platform_role').order('full_name').execute().data or []
+    except Exception as exc:
+        fail(exc,'Não foi possível listar os usuários');return
+    st.dataframe([{'Nome':p.get('full_name',''),'E-mail':p.get('email',''),
+                   'Perfil':names.get(p.get('platform_role'),p.get('platform_role'))} for p in rows],
+                 use_container_width=True,hide_index=True)
+    if not rows:return
+    with st.form('global_role_form'):
+        chosen=st.selectbox('Usuário para alterar',rows,
+                 format_func=lambda p:(p.get('full_name') or p.get('email') or p['id'])+' · '+p.get('email',''))
+        role=st.selectbox('Novo nível', ['viewer','standard','admin'],
+                 index=['viewer','standard','admin'].index(chosen.get('platform_role','viewer')),
+                 format_func=lambda p:names[p])
+        save=st.form_submit_button('Salvar nível de acesso',type='primary')
+    if save:
         try:
-            result=current_client().rpc('add_project_member',{'p_project_id':project['id'],
-                 'p_email':email.strip(),'p_role':role}).execute()
-            st.success(result.data or 'Colaborador incluído.');st.rerun()
-        except Exception as exc:fail(exc,'Não foi possível incluir colaborador')
+            response=current_client().rpc('admin_set_user_role',{'p_user_id':chosen['id'],'p_role':role}).execute()
+            st.success(response.data or 'Permissão alterada.');st.rerun()
+        except Exception as exc:fail(exc,'Não foi possível alterar permissão')
 
 
 def reports_page(project,stages,tasks,entries,docs):
@@ -712,7 +720,11 @@ def run():
                 raise RuntimeError('Sessão inválida')
             st.session_state['last_auth_validation']=datetime.now()
         projects=api('projects',sort='created_at')
-    except Exception:
+        myrole=my_role(current_client())
+    except Exception as exc:
+        if 'Perfis globais não configurados' in str(exc) or 'my_platform_role' in str(exc) or 'team_directory' in str(exc):
+            st.error('Atualização do banco necessária. Execute supabase/migrations/20261116_global_roles_kml.sql no Supabase e configure o primeiro administrador.')
+            return
         st.session_state.pop('supabase_client',None)
         st.session_state.pop('user_id',None)
         st.warning('Sessão expirada ou indisponível. Entre novamente.')
@@ -723,7 +735,8 @@ def run():
             +icon('building','#79dfd4',34)+'<div><div style="font-size:1.25rem;font-weight:800">CronogramaObras</div>'
             '<div style="font-size:.73rem;color:#a4c5d0">Cloud · Gestão de empreendimentos</div></div></div>',
             unsafe_allow_html=True)
-        st.caption('Versão 0.1.4 · Gestão integrada')
+        st.caption('Versão 0.1.5 · Gestão compartilhada')
+        st.caption('Perfil: '+{'admin':'Administrador','standard':'Padrão','viewer':'Visualizador'}[myrole])
         if st.button('Sair da conta',use_container_width=True):
             try:current_client().auth.sign_out()
             except Exception:pass
@@ -743,28 +756,31 @@ def run():
         st.markdown('<div class="co-eyebrow" style="color:#7bd5ca;margin:18px 0 6px">NAVEGAÇÃO</div>',unsafe_allow_html=True)
         page=st.session_state.get('page','Dashboard')
         for label in NAV:
+            if label=='Backups' and myrole!='admin':
+                continue
             row=st.columns([.16,.84],vertical_alignment='center',gap='small')
             with row[0]:st.markdown(icon(NAV_ICONS[label],'#72cec7' if page==label else '#a8c1c9',20),unsafe_allow_html=True)
             with row[1]:
                 if st.button(label,key='nav_'+label,type='primary' if page==label else 'secondary',use_container_width=True):
                     st.session_state['page']=label
                     st.rerun()
-        if st.button('＋ Novo projeto',type='primary',use_container_width=True,key='sidebar_new'):
-            st.session_state['page']='Novo projeto';st.rerun()
+        if myrole in ('admin','standard'):
+            if st.button('＋ Novo empreendimento',type='primary',use_container_width=True,key='sidebar_new'):
+                st.session_state['page']='Novo projeto';st.rerun()
         st.divider()
-        st.caption('Acesso individual · Supabase RLS · documentos privados')
+        st.caption('Acesso compartilhado · permissões globais · arquivos privados')
     page=st.session_state.get('page','Dashboard')
+    if page=='Projetos' or (page=='Backups' and myrole!='admin'):
+        page='Dashboard'
+        st.session_state['page']=page
     if page=='Backups':
-        backup_page(current_client(),projects,st.session_state['user_id'])
+        backup_page(current_client(),projects,st.session_state['user_id'],myrole)
         return
-    if page=='Novo projeto' or (not projects and page not in ('Projetos','Backups')):
-        show_new_project()
-        return
-    if page=='Projetos':
-        show_projects(projects)
-        return
-    if not projects:
-        show_projects([])
+    if page=='Novo projeto' or not projects:
+        if myrole in ('admin','standard'):
+            show_new_project()
+        else:
+            st.info('Nenhum empreendimento disponível. Aguarde um administrador ou usuário padrão cadastrar o primeiro empreendimento.')
         return
     project=next(p for p in projects if p['id']==project_id)
     try:
@@ -773,23 +789,21 @@ def run():
     except Exception as exc:
         fail(exc,'Não foi possível carregar os dados do projeto')
         return
-    myrole=next((m['role'] for m in team if m['user_id']==st.session_state['user_id']),
-                'owner' if project.get('owner_id')==st.session_state['user_id'] else 'viewer')
-    can_edit=myrole in ('owner','editor')
+    can_edit=myrole in ('admin','standard')
     top_banner(project)
     if page=='Dashboard':dashboard(project,stages,tasks,entries,docs)
     elif page=='Etapas':
         try:
             detail_map=get_detail_map(current_client(),project_id)
             milestones=get_milestones(current_client(),project_id)
-            overview_plan(current_client(),project_id,stages,tasks,docs,detail_map,entries,milestones,can_edit)
+            overview_plan(current_client(),project_id,stages,tasks,docs,detail_map,entries,milestones,can_edit,st.session_state["user_id"])
         except Exception as exc:
             fail(exc,'Verifique se a atualização das tabelas técnicas foi aplicada no Supabase')
     elif page=='Quadro de tarefas':kanban(project_id,stages,tasks,docs,can_edit,team)
     elif page=='Cronograma':execution_schedule(stages,tasks)
     elif page=='Financeiro':finance_dashboard(tasks,entries)
     elif page=='Documentos':all_documents(project_id,stages,tasks,docs)
-    elif page=='Equipe':team_management(project,team)
+    elif page=='Equipe':team_management(myrole,team)
     elif page=='Relatórios':reports_page(project,stages,tasks,entries,docs)
 
 if __name__=='__main__':run()
