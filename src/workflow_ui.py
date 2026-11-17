@@ -63,7 +63,7 @@ def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries
     c3.metric('Orçamento previsto',brl(planned))
     c4.metric('Parcelas cadastradas',sum(1 for e in entries if e.get('task_id') in {t['id'] for _,t in tagged}))
     with st.expander('Como preencher o plano',expanded=False):
-        st.write('**Editar ficha**: campos de matrícula, proprietário, consultas e condições especiais. **Valor / pagamentos**: parcelas e desembolsos. **Execução**: marcos, datas e andamento. **Anexos**: documentos de cada item. **Abrir tarefa**: situação, responsável, checklist e comentários.')
+        st.write('**Editar ficha**: campos de matrícula, proprietário, consultas e condições especiais. **Valor / pagamentos**: parcelas e desembolsos. **Cronograma**: datas e andamento na visão geral. **Anexos**: documentos de cada item. **Abrir tarefa**: situação, responsável, checklist e comentários.')
     for section in (DOC_SECTION, PROJECT_SECTION):
         group = [(s,t) for s,t in tagged if s['section'] == section]
         if not group:continue
@@ -82,7 +82,7 @@ def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries
                     st.markdown('**'+escape(f'{spec["code"]} {spec["name"]}')+'**')
                     st.caption(f'Etapa: {by_stage.get(t["stage_id"],"")} · {t.get("status","A fazer")} · {int(t.get("percent_done") or 0)}% executado')
                 with b:
-                    st.caption(f'Documentos previstos: {documented}/{total_docs}')
+                    st.caption(f'Anexos sugeridos: {documented}/{total_docs} (opcionais)')
                     st.progress(documented / total_docs if total_docs else 0.)
                 detail = details_map.get(t['id'],{}).get('data') or {}
                 if section==PROJECT_SECTION:
@@ -97,7 +97,10 @@ def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries
                 with buttons[1]:
                     if st.button('R$ Financeiro',key=f'plan_money_{t["id"]}',use_container_width=True):open_task_panel(t,'Financeiro')
                 with buttons[2]:
-                    if st.button('📅 Execução',key=f'plan_ex_{t["id"]}',use_container_width=True):open_task_panel(t,'Execução')
+                    if st.button('📅 Cronograma',key=f'plan_ex_{t["id"]}',use_container_width=True):
+                        st.session_state['selected_task_id']=None
+                        st.session_state['page']='Cronograma'
+                        st.rerun()
                 with buttons[3]:
                     if st.button('📎 Anexos',key=f'plan_attach_{t["id"]}',use_container_width=True):open_task_panel(t,'Anexos')
                 if is_admin:
@@ -162,10 +165,10 @@ def technical_form(sb, project_id: str, task: dict, can_edit: bool, details: dic
             st.rerun()
         except Exception as exc:
             st.error(f'Não foi possível gravar os dados: {exc}')
-    st.markdown('**Documentos previstos para este item**')
+    st.markdown('**Documentos sugeridos para este item (não obrigatórios para concluir)**')
     st.write(', '.join(spec['docs']))
     if spec['section']==PROJECT_SECTION:
-        st.info('O valor e a data de início da tarefa são editados em **Detalhes**. As parcelas estão em **Financeiro** e as atividades planejadas em **Execução**.')
+        st.info('O valor e a data de início da tarefa são editados em **Detalhes**. As parcelas estão em **Financeiro** e as datas e os avanços no **Cronograma**.')
 
 
 def execution_detail(sb, project_id: str, task: dict, can_edit: bool):
@@ -173,15 +176,15 @@ def execution_detail(sb, project_id: str, task: dict, can_edit: bool):
     st.caption(f'Período geral da tarefa: {pretty_date(task.get("start_date"))} até {pretty_date(task.get("due_date"))}. Altere as datas gerais em Detalhes.')
     rows=sb.table('execution_milestones').select('*').eq('task_id',task['id']).order('start_date').execute().data or []
     if rows:
-        df=pd.DataFrame([{'Atividade':x['title'],'Início':x['start_date'],'Fim':x['due_date'],
+        df=pd.DataFrame([{'Atividade':x['title'],'Início':pretty_date(x['start_date']),'Fim':pretty_date(x['due_date']),
                 'Avanço':x['percent_done'],'Situação':x['status']} for x in rows])
         st.dataframe(df,hide_index=True,use_container_width=True)
         chart=df.copy()
-        chart['Início']=pd.to_datetime(chart['Início']);chart['Fim']=pd.to_datetime(chart['Fim'])
+        chart['Início']=pd.to_datetime(chart['Início'],dayfirst=True);chart['Fim']=pd.to_datetime(chart['Fim'],dayfirst=True)
         chart['Fim desenho']=chart['Fim']+pd.Timedelta(days=1)
         fig=px.timeline(chart,x_start='Início',x_end='Fim desenho',y='Atividade',color='Situação',
                   hover_data=['Avanço'],color_discrete_map={'A fazer':'#94A3B8','Em andamento':'#0F766E','Concluída':'#22A06B','Bloqueada':'#DC2626'})
-        fig.update_yaxes(autorange='reversed');fig.update_layout(height=max(270,len(chart)*54+95),margin=dict(l=5,r=5,t=12,b=8),legend_title_text='')
+        fig.update_yaxes(autorange='reversed');fig.update_xaxes(tickformat='%d/%m/%y');fig.update_layout(height=max(270,len(chart)*54+95),margin=dict(l=5,r=5,t=12,b=8),legend_title_text='')
         st.plotly_chart(fig,use_container_width=True)
         if can_edit:
             for row in rows:
@@ -189,8 +192,8 @@ def execution_detail(sb, project_id: str, task: dict, can_edit: bool):
                     with st.form(f'execution_edit_{row["id"]}'):
                         title=st.text_input('Atividade',value=row['title'])
                         a,b,c=st.columns(3)
-                        with a:begin=st.date_input('Início',_date(row['start_date']))
-                        with b:end=st.date_input('Conclusão',_date(row['due_date']))
+                        with a:begin=st.date_input('Início',_date(row['start_date']),format='DD/MM/YYYY')
+                        with b:end=st.date_input('Conclusão',_date(row['due_date']),format='DD/MM/YYYY')
                         with c:pct=st.slider('Avanço %',0,100,int(row.get('percent_done') or 0))
                         status=st.selectbox('Situação',['A fazer','Em andamento','Concluída','Bloqueada'],index=['A fazer','Em andamento','Concluída','Bloqueada'].index(row['status']))
                         save=st.form_submit_button('Salvar alterações')
@@ -210,8 +213,8 @@ def execution_detail(sb, project_id: str, task: dict, can_edit: bool):
             with st.form(f'new_execution_{task["id"]}'):
                 title=st.text_input('Nome da atividade / marco',placeholder='Ex.: levantamento, revisão, protocolo, aprovação')
                 a,b=st.columns(2)
-                with a:begin=st.date_input('Data de início',_date(task.get('start_date')))
-                with b:end=st.date_input('Data final',_date(task.get('due_date'),date.today()+timedelta(days=14)))
+                with a:begin=st.date_input('Data de início',_date(task.get('start_date')),format='DD/MM/YYYY')
+                with b:end=st.date_input('Data final',_date(task.get('due_date'),date.today()+timedelta(days=14)),format='DD/MM/YYYY')
                 progress=st.slider('Avanço (%)',0,100,0)
                 status=st.selectbox('Situação',['A fazer','Em andamento','Concluída','Bloqueada'])
                 send=st.form_submit_button('Registrar atividade',type='primary')

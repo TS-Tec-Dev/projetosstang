@@ -250,7 +250,7 @@ def purge_project(sb, project_id, owner_id):
         raise PermissionError('Somente administradores podem excluir empreendimentos.')
     result=sb.table('projects').select('id').eq('id',project_id).limit(1).execute().data or []
     if not result:raise ValueError('Empreendimento não encontrado.')
-    # Gatilho do orçamento impede remoção de último orçamento de tarefa concluída.
+    # A exclusão de um empreendimento não depende da presença de orçamento.
     # Retorna as tarefas a fazer antes da cascata para não deixar esse bloqueio.
     for t in _fetch_all(sb,'tasks',project_id):
         if t.get('status')=='Concluída':

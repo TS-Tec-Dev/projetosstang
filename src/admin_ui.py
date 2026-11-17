@@ -42,7 +42,7 @@ def admin_panel(sb, url: str, anon_key: str):
         'Nome': u.get('full_name') or '', 'E-mail':u.get('email') or '',
         'Perfil': ROLE_NAMES.get(u.get('platform_role'),u.get('platform_role')),
         'Situação':'Ativo' if u.get('account_enabled') else 'Desativado',
-        'Validade':local_expiry_day(u['account_expires_at']).strftime('%d/%m/%Y') if u.get('account_expires_at') else 'Vitalício',
+        'Validade':local_expiry_day(u['account_expires_at']).strftime('%d/%m/%y') if u.get('account_expires_at') else 'Vitalício',
     } for u in users],use_container_width=True,hide_index=True)
 
     with st.expander('➕ Cadastrar novo usuário',expanded=not bool(users)):

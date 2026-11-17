@@ -12,5 +12,5 @@ def brl(amount):
 
 def pretty_date(value):
     if not value:return "—"
-    try:return date.fromisoformat(str(value)[:10]).strftime("%d/%m/%Y")
+    try:return date.fromisoformat(str(value)[:10]).strftime("%d/%m/%y")
     except Exception:return str(value)

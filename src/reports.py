@@ -53,7 +53,7 @@ def pdf_report(project: dict, stages: list, tasks: list, entries: list, docs: li
     styles.add(ParagraphStyle(name='CellHeader', fontName='Helvetica-Bold', fontSize=7, leading=9, textColor=colors.white))
     stats = brief_stats(tasks,entries)
     story = [Paragraph(escape(project.get('title','Projeto')), styles['Cover']),
-             Paragraph(f"Cliente: {escape(project.get('client_name') or '-')}  |  Local: {escape(project.get('location') or '-')}  |  Gerado em: {date.today().strftime('%d/%m/%Y')}",styles['Sub']),
+             Paragraph(f"Cliente: {escape(project.get('client_name') or '-')}  |  Local: {escape(project.get('location') or '-')}  |  Gerado em: {date.today().strftime('%d/%m/%y')}",styles['Sub']),
              Spacer(1, 12)]
     summary = [
         ['TAREFAS', 'CONCLUIDAS', 'AVANCO', 'PREVISTO', 'REALIZADO'],
@@ -144,7 +144,7 @@ def xlsx_report(project, stages, tasks, entries, docs, detail_map=None, mileston
         ('Cliente',project.get('client_name','')),('Local',project.get('location','')),
         ('Total de tarefas',stats['total']),('Tarefas concluídas',stats['closed']),
         ('Avanço (%)',stats['progress']),('Previsão financeira',stats['planned']),
-        ('Financeiro realizado',stats['paid']),('Gerado em',datetime.now().strftime('%d/%m/%Y %H:%M')),
+        ('Financeiro realizado',stats['paid']),('Gerado em',datetime.now().strftime('%d/%m/%y %H:%M')),
     ],start=2):
         summary.write(idx,0,name,head)
         summary.write(idx,1,value, money if idx in (7,8) else None)

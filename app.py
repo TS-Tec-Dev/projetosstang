@@ -21,7 +21,7 @@ from src.db import (
 )
 from src.reports import brief_stats, pdf_report, xlsx_report
 from src.workflow import DEFAULT_SECTION_NAMES, make_template_rows, doc_categories, BY_CODE, code_for_task, checklist_doc_status
-from src.workflow_ui import technical_form, execution_detail, get_detail_map, get_milestones, overview_plan
+from src.workflow_ui import technical_form, get_detail_map, get_milestones, overview_plan
 from src.ui import icon, metric_card, CSS
 from src.backup_ui import backup_page
 from src.admin_ui import admin_panel
@@ -135,9 +135,9 @@ def show_new_project():
             title=st.text_input("Nome do projeto *",placeholder="Implantação de unidade operacional")
             client_name=st.text_input("Cliente / empresa")
             location=st.text_input("Município / endereço de referência")
-            start=st.date_input("Data de início",date.today())
+            start=st.date_input("Data de início",date.today(),format="DD/MM/YYYY")
         with c2:
-            target=st.date_input("Previsão de conclusão",date.today()+timedelta(days=180))
+            target=st.date_input("Previsão de conclusão",date.today()+timedelta(days=180),format="DD/MM/YYYY")
             description=st.text_area("Descrição do escopo",height=116)
         st.info("13 itens automáticos em duas áreas: matrícula, proprietário e contratos; topografia, projetos, EIV, licenças, acesso e Habite-se. Prazos são somente estimativas internas.")
         send=st.form_submit_button("Criar projeto e cronograma completo",type="primary",use_container_width=True)
@@ -265,7 +265,7 @@ def dashboard(project,stages,tasks,entries,docs):
             if e.get('status')=='Pago':
                 monthly[str(e.get('paid_date') or e['planned_date'])[:7]]['Realizado']+=float(e.get('paid_amount') or 0)
         if monthly:
-            rows=[{'Mês':m,'Tipo':k,'Valor':v} for m,data in sorted(monthly.items()) for k,v in data.items()]
+            rows=[{'Mês':m[5:7]+'/'+m[2:4],'Tipo':k,'Valor':v} for m,data in sorted(monthly.items()) for k,v in data.items()]
             fig=px.bar(pd.DataFrame(rows),x='Mês',y='Valor',color='Tipo',barmode='group',
                 color_discrete_map={'Planejado':'#087F80','Realizado':'#dca64b'})
             fig.update_layout(height=308,margin=dict(t=15,l=5,r=5,b=8),legend_title_text='',
@@ -336,8 +336,8 @@ def kanban(project_id,stages,tasks,docs,can_edit,team,is_admin):
                 desc=st.text_area('Descrição / requisitos')
                 org=st.selectbox('Etapa',options=stages,format_func=lambda x:x['name'])
                 x,y=st.columns(2)
-                with x:start=st.date_input('Início',date.today(),key='create_start')
-                with y:due=st.date_input('Fim previsto',date.today()+timedelta(days=14),key='create_due')
+                with x:start=st.date_input('Início',date.today(),key='create_start',format='DD/MM/YYYY')
+                with y:due=st.date_input('Fim previsto',date.today()+timedelta(days=14),key='create_due',format='DD/MM/YYYY')
                 cost=st.number_input('Orçamento previsto (R$)',min_value=0.0,step=100.0)
                 save=st.form_submit_button('Salvar tarefa',type='primary')
             if save:
@@ -361,8 +361,6 @@ def kanban(project_id,stages,tasks,docs,can_edit,team,is_admin):
                     st.caption(stage_names.get(task['stage_id'],'')+' · '+task.get('priority','Normal'))
                     st.caption('📅 '+pretty_date(task.get('due_date')))
                     st.progress(int(task.get('percent_done') or 0)/100)
-                    if not any(d['task_id']==task['id'] and d['category']=='Orçamento' for d in docs):
-                        st.caption('⚠️ Orçamento pendente')
                     if st.button('Abrir detalhes',key=f"kanban_{task['id']}",use_container_width=True):
                         open_task(task['id'])
     if not visible:st.info('Nenhuma tarefa com os filtros selecionados.')
@@ -374,10 +372,11 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team,is_admin):
     st.title(task['title'])
     st.caption(task.get('description') or 'Detalhes, documentos, checklist e fluxo financeiro da tarefa.')
     related_docs=[d for d in all_docs if d['task_id']==task['id']]
-    own_budget=any(d['category']=='Orçamento' for d in related_docs)
-    if not own_budget:st.warning('Esta tarefa ainda não possui orçamento anexado. A conclusão só será liberada após o envio.')
-    panels=['Ficha técnica','Detalhes','Checklist','Financeiro','Execução','Anexos','Comentários']
-    pane=st.radio('Área da tarefa',panels,key=f'task_panel_{task["id"]}',horizontal=True)
+    panels=['Ficha técnica','Detalhes','Checklist','Financeiro','Anexos','Comentários']
+    panel_key=f'task_panel_{task["id"]}'
+    if st.session_state.get(panel_key) not in (None, *panels):
+        st.session_state[panel_key]='Detalhes'
+    pane=st.radio('Área da tarefa',panels,key=panel_key,horizontal=True)
     if pane=='Detalhes':
         with st.form('task_edit'):
             title=st.text_input('Título',value=task['title'],disabled=not is_admin)
@@ -389,8 +388,8 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team,is_admin):
                 status=st.selectbox('Situação',STATUS,index=STATUS.index(task['status']),disabled=not is_admin)
                 priority=st.selectbox('Prioridade',PRIORITY,index=PRIORITY.index(task['priority']),disabled=not is_admin)
             with r2:
-                start=st.date_input('Início previsto',date_value(task.get('start_date')),disabled=not is_admin)
-                due=st.date_input('Conclusão prevista',date_value(task.get('due_date')),disabled=not is_admin)
+                start=st.date_input('Início previsto',date_value(task.get('start_date')),disabled=not is_admin,format='DD/MM/YYYY')
+                due=st.date_input('Conclusão prevista',date_value(task.get('due_date')),disabled=not is_admin,format='DD/MM/YYYY')
                 progress=st.slider('Execução (%)',0,100,int(task.get('percent_done') or 0),1,disabled=not is_admin)
             with r3:
                 choices=[('', 'Sem responsável')]+[(m['user_id'],m['profile'].get('full_name') or m['profile'].get('email','Usuário')) for m in team]
@@ -403,7 +402,6 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team,is_admin):
             save=st.form_submit_button('Salvar alterações',type='primary',disabled=not is_admin)
         if save:
             if due<start:st.warning('Prazo final anterior à data inicial.')
-            elif status=='Concluída' and not own_budget:st.error('Primeiro anexe um orçamento na aba Anexos.')
             else:
                 try:
                     do_update('tasks',task['id'],{
@@ -420,9 +418,6 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team,is_admin):
         except Exception as exc:fail(exc,'Execute o SQL de atualização do Supabase para habilitar as fichas técnicas')
     elif pane=='Checklist':show_checklist(project_id,task,is_admin)
     elif pane=='Financeiro':show_finance_task(project_id,task,can_edit)
-    elif pane=='Execução':
-        try:execution_detail(current_client(),project_id,task,is_admin)
-        except Exception as exc:fail(exc,'Execute o SQL de atualização do Supabase para habilitar as atividades de execução')
     elif pane=='Anexos':attachments(project_id,task,related_docs,can_edit,is_admin)
     elif pane=='Comentários':comments(project_id,task,team,can_edit)
 
@@ -481,11 +476,11 @@ def show_finance_task(project_id,task,can_edit):
             with st.form('new_fin'):
                 descr=st.text_input('Descrição *',placeholder='Ex.: 1ª parcela do projeto executivo')
                 a,b,c=st.columns(3)
-                with a:planned_date=st.date_input('Vencimento previsto',date.today())
+                with a:planned_date=st.date_input('Vencimento previsto',date.today(),format='DD/MM/YYYY')
                 with b:amount=st.number_input('Valor previsto (R$)',min_value=0.0,step=100.0)
                 with c:paid=st.checkbox('Já foi pago')
                 actual=st.number_input('Valor efetivamente pago (R$)',min_value=0.0,step=100.0) if paid else 0.0
-                paid_date=st.date_input('Data do pagamento',date.today()) if paid else None
+                paid_date=st.date_input('Data do pagamento',date.today(),format='DD/MM/YYYY') if paid else None
                 send=st.form_submit_button('Adicionar lançamento',type='primary')
             if send:
                 if not descr.strip():st.warning('Informe a descrição da parcela.')
@@ -504,7 +499,7 @@ def attachments(project_id,task,docs,can_edit,is_admin=False):
     code=code_for_task(task)
     spec=BY_CODE.get(code)
     if spec:
-        st.markdown('**Documentos previstos para a etapa**')
+        st.markdown('**Documentos sugeridos para a etapa (opcionais)**')
         for category,found in checklist_doc_status(spec,docs):
             st.caption(('✅' if found else '⬜')+' '+category)
     st.caption('PDF, imagens (PNG/JPG/WEBP), Excel (XLS/XLSX/XLSM), CSV, Word, DWG, DXF, ZIP e TXT. Até 25 MB por arquivo.')
@@ -557,7 +552,7 @@ def comments(project_id,task,team,can_edit):
     names={x['user_id']:x['profile'].get('full_name') or x['profile'].get('email','Equipe') for x in team}
     for item in rows:
         with st.container(border=True):
-            st.caption((names.get(item['author_id']) or 'Colaborador')+' · '+item['created_at'][:16].replace('T',' '))
+            st.caption((names.get(item['author_id']) or 'Colaborador')+' · '+pretty_date(item['created_at'])+' '+item['created_at'][11:16])
             st.write(item['content'])
     if not can_edit:
         st.caption('Seu acesso é de visualização. Comentários são somente leitura.')
@@ -591,11 +586,12 @@ def execution_schedule(stages,tasks):
        color_discrete_map={'A fazer':'#94A3B8','Em andamento':'#0F766E','Em aprovação':'#3B82F6',
                            'Concluída':'#22A06B','Bloqueada':'#EF4444'})
     fig.update_yaxes(autorange='reversed')
+    fig.update_xaxes(tickformat='%d/%m/%y')
     fig.update_layout(height=max(360,90+len(df)*35),margin=dict(l=5,r=5,t=15,b=10),legend_title_text='',
                       paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig,use_container_width=True)
-    st.dataframe(pd.DataFrame([{'Etapa':r['Etapa'],'Tarefa':r['Tarefa'],'Início':r['Início'].date(),
-       'Prazo':r['Fim'].date(),'Status':r['Status'],'Avanço':str(r['Avanço (%)'])+'%'} for _,r in df.iterrows()]),
+    st.dataframe(pd.DataFrame([{'Etapa':r['Etapa'],'Tarefa':r['Tarefa'],'Início':pretty_date(r['Início'].date().isoformat()),
+       'Prazo':pretty_date(r['Fim'].date().isoformat()),'Status':r['Status'],'Avanço':str(r['Avanço (%)'])+'%'} for _,r in df.iterrows()]),
        hide_index=True,use_container_width=True)
     try:
         milestones=get_milestones(current_client(),st.session_state['project_id'])
@@ -607,6 +603,8 @@ def execution_schedule(stages,tasks):
         md=pd.DataFrame([{'Tarefa':names.get(m['task_id'],'-'),'Atividade':m['title'],
                'Início':m['start_date'],'Prazo':m['due_date'],
                'Status':m['status'],'Avanço (%)':m['percent_done']} for m in milestones])
+        md['Início']=md['Início'].apply(pretty_date)
+        md['Prazo']=md['Prazo'].apply(pretty_date)
         st.dataframe(md,hide_index=True,use_container_width=True)
 
 
@@ -627,14 +625,14 @@ def finance_dashboard(tasks,entries):
         if item['status']=='Pago':
             paid_month=str(item.get('paid_date') or item['planned_date'])[:7]
             months[paid_month]['Realizado']+=float(item['paid_amount'] or 0)
-    df=pd.DataFrame([{'Mês':month,'Tipo':kind,'Valor':value}
+    df=pd.DataFrame([{'Mês':month[5:7]+'/'+month[2:4],'Tipo':kind,'Valor':value}
            for month,data in sorted(months.items()) for kind,value in data.items()])
     fig=px.bar(df,x='Mês',y='Valor',color='Tipo',barmode='group',
         color_discrete_map={'Planejado':'#0F766E','Realizado':'#F59E0B'})
     fig.update_layout(height=390,margin=dict(l=5,r=5,t=18,b=4),legend_title_text='')
     st.plotly_chart(fig,use_container_width=True)
     names={t['id']:t['title'] for t in tasks}
-    st.dataframe(pd.DataFrame([{'Competência':str(e['planned_date'])[:7],
+    st.dataframe(pd.DataFrame([{'Competência':str(e['planned_date'])[5:7]+'/'+str(e['planned_date'])[2:4],
       'Tarefa':names.get(e['task_id'],''),'Descrição':e['description'],
       'Valor previsto':brl(e['planned_amount']),'Pago':brl(e['paid_amount']),
       'Situação':e['status']} for e in entries]),hide_index=True,use_container_width=True)
@@ -720,7 +718,7 @@ def run():
             +icon('building','#79dfd4',34)+'<div><div style="font-size:1.25rem;font-weight:800">CronogramaObras</div>'
             '<div style="font-size:.73rem;color:#a4c5d0">Cloud · Gestão de empreendimentos</div></div></div>',
             unsafe_allow_html=True)
-        st.caption('Versão 0.1.8 · KML com satélite e exclusão segura')
+        st.caption('Versão 0.2.0 · Tarefas simplificadas · KML 0.1.9')
         st.caption('Perfil: '+{'admin':'Administrador','standard':'Padrão','viewer':'Visualizador'}[myrole])
         if st.button('Sair da conta',use_container_width=True):
             try:current_client().auth.sign_out()
