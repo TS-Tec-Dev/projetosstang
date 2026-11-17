@@ -1,2 +1,5 @@
+# A validação JWT legada do gateway pode rejeitar tokens de chaves novas.
+# A própria Edge Function valida o token usando Supabase Auth (getUser),
+# exige admin ativo e só então usa a chave de serviço no servidor.
 [functions.admin-users]
-verify_jwt = true
+verify_jwt = false

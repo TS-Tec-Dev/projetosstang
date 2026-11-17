@@ -1,4 +1,7 @@
-// CronogramaObras v0.1.6: administração de contas, só via função de borda.
+// CronogramaObras v0.1.7: administração de contas, só via função de borda.
+// O gateway não verifica JWT legado (verify_jwt=false), mas a função
+// exige um token válido e Administrador ativo ANTES de usar a service_role.
+// Jamais remova a verificação auth.getUser() ou o controle my_account_access().
 // SUPABASE_SERVICE_ROLE_KEY NUNCA é enviado ao Streamlit ou ao GitHub.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -14,6 +17,8 @@ const emailOk = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length 
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+  // Diagnóstico sem tokens/chaves/dados; abra a URL da função no navegador.
+  if (req.method === 'GET') return json({ status: 'online', function: 'admin-users', version: '0.1.7' });
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
   const url = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');

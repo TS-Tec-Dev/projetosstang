@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timezone
 from zoneinfo import ZoneInfo
 import streamlit as st
-from src.admin_api import admin_users
+from src.admin_api import admin_users, admin_users_health
 
 ZONE = ZoneInfo('America/Sao_Paulo')
 ROLE_NAMES = {'admin':'Administrador','standard':'Padrão','viewer':'Visualizador'}
@@ -28,7 +28,14 @@ def admin_panel(sb, url: str, anon_key: str):
         users = admin_users(sb, url, anon_key, {'action': 'list'}).get('users', [])
     except Exception as exc:
         st.error(f'Falha ao consultar usuários: {exc}')
-        st.info('Verifique se a Edge Function **admin-users** foi publicada no Supabase.')
+        st.info('Use o diagnóstico abaixo para diferenciar uma função não publicada de um problema de token ou de permissão.')
+        if st.button('Testar disponibilidade da Edge Function', key='check_admin_fn'):
+            try:
+                status = admin_users_health(url, anon_key)
+                version = status.get('version') or 'não informada'
+                st.success(f"Edge Function online. Versão publicada: {version}. Se a listagem falhar, verifique a permissão Administrador e os logs.")
+            except Exception as health_exc:
+                st.error(f'Diagnóstico da função: {health_exc}')
         return
     st.metric('Contas cadastradas',len(users))
     st.dataframe([{

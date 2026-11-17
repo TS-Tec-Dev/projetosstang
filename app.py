@@ -716,7 +716,7 @@ def run():
             +icon('building','#79dfd4',34)+'<div><div style="font-size:1.25rem;font-weight:800">CronogramaObras</div>'
             '<div style="font-size:.73rem;color:#a4c5d0">Cloud · Gestão de empreendimentos</div></div></div>',
             unsafe_allow_html=True)
-        st.caption('Versão 0.1.6 · Gestão de contas')
+        st.caption('Versão 0.1.7 · Administração corrigida')
         st.caption('Perfil: '+{'admin':'Administrador','standard':'Padrão','viewer':'Visualizador'}[myrole])
         if st.button('Sair da conta',use_container_width=True):
             try:current_client().auth.sign_out()

@@ -38,27 +38,52 @@ CSS = """
 [data-testid="stAppViewContainer"]{background:linear-gradient(165deg,#f4f8fa 0%,#eef5f6 100%);}
 [data-testid="stSidebar"]{background:#102935!important;border-right:1px solid #244353!important;}
 [data-testid="stSidebar"] *{color:#eaf5f7!important;}
-/* Contraste do empreendimento: não herdar o texto branco do menu escuro. */
-[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="combobox"]{
-  background:#ffffff!important; color:#153446!important; border:1px solid #8aaab8!important;
-  opacity:1!important;-webkit-text-fill-color:#153446!important;
+/* Empreendimento ativo: fundo ESCURO + texto BRANCO.
+   Não dependemos mais do DOM antigo do BaseWeb (Streamlit >=1.58 também
+   disponibiliza widgets Selectbox próprios). */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [role="combobox"],
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stSidebar"] .st-key-active_enterprise_select [role="combobox"],
+[data-testid="stSidebar"] .st-key-active_enterprise_select [data-baseweb="select"] > div {
+  background:#164653!important;
+  background-color:#164653!important;
+  border:1px solid #56b7b5!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+  min-height:42px;
 }
-[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] *,
-[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] input,
-[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
-[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] div,
-[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] svg{
-  color:#153446!important;fill:#153446!important;-webkit-text-fill-color:#153446!important;
-  opacity:1!important;text-shadow:none!important;
+/* Tratar texto e setas inclusive quando o Streamlit troca o mecanismo do select. */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [role="combobox"] *,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] *,
+[data-testid="stSidebar"] .st-key-active_enterprise_select [role="combobox"] *,
+[data-testid="stSidebar"] .st-key-active_enterprise_select [data-baseweb="select"] *,
+[data-testid="stSidebar"] .st-key-active_enterprise_select input,
+[data-testid="stSidebar"] .st-key-active_enterprise_select svg {
+  color:#ffffff!important;
+  fill:currentColor!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+  text-shadow:none!important;
 }
-[data-baseweb="popover"] [role="listbox"], [data-baseweb="popover"] [role="option"]{
-  background:#fff!important;color:#153446!important;opacity:1!important;
+/* Em versões em que a lista é montada fora do sidebar, ela usa fundo claro. */
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="popover"] [role="option"],
+[data-testid="stSelectboxVirtualDropdown"],
+[data-testid="stSelectboxVirtualDropdown"] [role="option"] {
+  background:#ffffff!important;
+  color:#153446!important;
+  -webkit-text-fill-color:#153446!important;
 }
-[data-baseweb="popover"] [role="option"] *,[data-baseweb="popover"] [role="option"] span{
-  color:#153446!important;-webkit-text-fill-color:#153446!important;opacity:1!important;
+[data-baseweb="popover"] [role="option"] *,
+[data-testid="stSelectboxVirtualDropdown"] [role="option"] * {
+  color:#153446!important;
+  -webkit-text-fill-color:#153446!important;
 }
-[data-baseweb="popover"] [role="option"]:hover{background:#d4eded!important;}
+[data-baseweb="popover"] [role="option"]:hover,
+[data-testid="stSelectboxVirtualDropdown"] [role="option"]:hover {
+  background:#d8efee!important;
+}
 .co-active-enterprise{font-size:.85rem;font-weight:750;color:#fff!important;
   background:#0b6770;border:1px solid #31a6a8;border-radius:9px;
   padding:9px 10px;margin-top:-4px;margin-bottom:14px;overflow-wrap:anywhere;}
