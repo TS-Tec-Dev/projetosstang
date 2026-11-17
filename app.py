@@ -423,7 +423,7 @@ def task_detail(project_id,task,stages,all_docs,can_edit,team,is_admin):
     elif pane=='Execução':
         try:execution_detail(current_client(),project_id,task,is_admin)
         except Exception as exc:fail(exc,'Execute o SQL de atualização do Supabase para habilitar as atividades de execução')
-    elif pane=='Anexos':attachments(project_id,task,related_docs,can_edit)
+    elif pane=='Anexos':attachments(project_id,task,related_docs,can_edit,is_admin)
     elif pane=='Comentários':comments(project_id,task,team,can_edit)
 
 
@@ -499,7 +499,7 @@ def show_finance_task(project_id,task,can_edit):
                     except Exception as exc:fail(exc)
 
 
-def attachments(project_id,task,docs,can_edit):
+def attachments(project_id,task,docs,can_edit,is_admin=False):
     st.markdown('#### Documentos da tarefa')
     code=code_for_task(task)
     spec=BY_CODE.get(code)
@@ -536,7 +536,11 @@ def attachments(project_id,task,docs,can_edit):
                     if url:st.link_button('Abrir / baixar ↗',url,use_container_width=True)
                 except Exception as exc:fail(exc,'Falha ao abrir arquivo')
             with c3:
-                if can_edit and st.button('Excluir',key=f"remove_doc_{d['id']}"):
+                kml_attachment = (
+                    d.get('category') == 'Localização KML'
+                    or str(d.get('filename', '')).lower().endswith('.kml')
+                )
+                if can_edit and not kml_attachment and st.button('Excluir',key=f"remove_doc_{d['id']}"):
                     try:remove_document(current_client(),d);st.rerun()
                     except Exception as exc:fail(exc,'Arquivo preservado')
             if d['filename'].lower().endswith(('.png','.jpg','.jpeg','.webp')):
@@ -716,7 +720,7 @@ def run():
             +icon('building','#79dfd4',34)+'<div><div style="font-size:1.25rem;font-weight:800">CronogramaObras</div>'
             '<div style="font-size:.73rem;color:#a4c5d0">Cloud · Gestão de empreendimentos</div></div></div>',
             unsafe_allow_html=True)
-        st.caption('Versão 0.1.7 · Administração corrigida')
+        st.caption('Versão 0.1.8 · KML com satélite e exclusão segura')
         st.caption('Perfil: '+{'admin':'Administrador','standard':'Padrão','viewer':'Visualizador'}[myrole])
         if st.button('Sair da conta',use_container_width=True):
             try:current_client().auth.sign_out()

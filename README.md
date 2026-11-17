@@ -1,12 +1,14 @@
+> **v0.1.8**: consulte [ATUALIZAR_v0.1.8.md](ATUALIZAR_v0.1.8.md) para atualizar o visualizador KML com satélite e exclusão administrativa.
+
 > **v0.1.6**: siga [ATUALIZAR_v0.1.6.md](ATUALIZAR_v0.1.6.md). A criação e gestão de contas usa a Edge Function `admin-users`.
 
-# CronogramaObras Cloud v0.1.6 — Administração de usuários
+# CronogramaObras Cloud v0.1.8 — Gestão e localização KML
 
 Sistema Streamlit + Supabase. O roteiro de implantação segue as seções **Documentação (1.1 a 1.3)** e **Projetos Técnicos (2.1 a 2.10)**, com painel gerencial, Gantt, custos, tarefas, anexos, equipe, relatórios e backup. A interface não usa o nome do documento que originou o roteiro.
 
 ## Alterações desta versão
 
-- **1.0 Localização do empreendimento:** antes de 1.1 Matrícula, anexar KML do Google Earth (até 10 MB), visualizar pontos, linhas e polígonos no mapa e abrir/baixar o original. O KML fica arquivado como documento privado vinculado à Matrícula; arquivos com recursos não suportados continuam disponíveis para abrir no Google Earth.
+- **1.0 Localização do empreendimento:** antes de 1.1 Matrícula, anexar KML do Google Earth (até 10 MB), visualizar pontos, linhas e polígonos sobre mapa de satélite Esri e abrir/baixar/excluir individualmente o original (exclusão só pelo Administrador). O KML fica arquivado como documento privado vinculado à Matrícula; arquivos com recursos não suportados continuam disponíveis para abrir no Google Earth.
 - **Navegação:** removida a aba Projetos; selecionar o empreendimento apenas em **Empreendimento ativo**, com cores de texto e de fundo corrigidas. Novo empreendimento tem botão separado para Administradores e usuários Padrão.
 - **Compartilhamento:** todos os usuários autenticados veem todos os projetos, suas etapas, tarefas e documentos; o repositório GitHub não recebe arquivos do Supabase.
 - **Perfis globais:** Administrador (cria, edita, define funções de usuários, restaura backups e exclui qualquer projeto); Padrão (cria, edita, envia anexos); Visualizador (somente leitura, mapa, relatórios e download de anexos). **A partir da v0.1.6, novas contas são criadas pelo Administrador** (não existe autoinscrição pela interface).
@@ -30,7 +32,7 @@ Execute **somente** `supabase/schema.sql` (que já inclui a migração global) e
 
 - O acesso compartilhado significa que **todos os usuários autenticados** conseguem ver projetos e arquivos. Cadastros no Supabase devem ser controlados pela organização. Se não quiser permitir autoinscrição, desative o cadastro público no painel **Authentication** e convide contas por processo administrativo.
 - Backup completo contém informações e anexos; guarde seus ZIPs em local protegido. Visualizadores podem baixar anexos conforme solicitado.
-- KML: somente `.kml`, não `.kmz`; o visualizador interno mostra geometria simples, não conteúdo 3D, modelos e overlays. O original pode ser aberto no Google Earth.
+- KML: somente `.kml`, não `.kmz`; o visualizador interno mostra geometria simples sobre satélite Esri, não conteúdo 3D, modelos e overlays. Imagens de satélite dependem de conexão externa e dos termos de uso da Esri. O original pode ser aberto no Google Earth.
 - Tabelas, documentos e usuários existentes não são excluídos pela migração. Rótulos antigos de etapas são normalizados quando não houver conflito de nomes.
 - Não foi executado teste integrado no banco Supabase real. Valide as três permissões usando contas separadas após implantação.
 
