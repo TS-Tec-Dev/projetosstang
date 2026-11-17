@@ -69,7 +69,7 @@ def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries
         if not group:continue
         st.markdown(f'### {section}')
         if section==DOC_SECTION:
-            location_kml_panel(sb,project_id,tasks,documents,can_edit,user_id)
+            location_kml_panel(sb,project_id,tasks,documents,can_edit,user_id,is_admin=is_admin)
         for spec,t in group:
             related_docs=[d for d in documents if d['task_id']==t['id']]
             documented=sum(ok for _,ok in checklist_doc_status(spec,related_docs))

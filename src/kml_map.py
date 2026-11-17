@@ -47,28 +47,75 @@ def read_kml_geometries(data: bytes) -> dict:
     return geometry
 
 
+# Imagens de satélite por serviço Esri World Imagery (requer internet no navegador).
+# Crédito do provedor visível no mapa. Não é o mosaico do Google Earth.
+ESRI_IMAGERY_URL = (
+    "https://server.arcgisonline.com/ArcGIS/rest/services/"
+    "World_Imagery/MapServer/tile/{z}/{y}/{x}"
+)
+ESRI_ATTRIBUTION = (
+    "Tiles &copy; Esri &mdash; Sources: Esri, Maxar, Earthstar Geographics, "
+    "and the GIS User Community"
+)
+
+
 def map_for_kml(geometry):
-    """Deck com desenhos próprios; sem depender de um token Mapbox do usuário."""
-    import pydeck as pdk
-    allpoints=geometry['all']
-    if not allpoints:return None
-    centerlon=sum(v[0] for v in allpoints)/len(allpoints)
-    centerlat=sum(v[1] for v in allpoints)/len(allpoints)
-    spread=max(max(abs(x[0]-centerlon),abs(x[1]-centerlat)) for x in allpoints)
-    zoom=14 if spread<0.003 else 12 if spread<0.02 else 10 if spread<0.1 else 7 if spread<1 else 4
-    layers=[]
-    if geometry['polygons']:
-        layers.append(pdk.Layer('PolygonLayer',data=[{'polygon':p} for p in geometry['polygons']],
-                                get_polygon='polygon',get_fill_color=[8,127,128,55],
-                                get_line_color=[7,109,111,225],stroked=True,filled=True,
-                                line_width_min_pixels=2,pickable=True))
-    if geometry['paths']:
-        layers.append(pdk.Layer('PathLayer',data=[{'path':p} for p in geometry['paths']],
-                                get_path='path',get_color=[8,127,128,230],width_min_pixels=3,
-                                pickable=True))
-    if geometry['points']:
-        layers.append(pdk.Layer('ScatterplotLayer',data=[{'position':p} for p in geometry['points']],
-                                get_position='position',get_fill_color=[230,120,27,240],
-                                get_radius=8,radius_min_pixels=5,pickable=True))
-    return pdk.Deck(layers=layers,initial_view_state=pdk.ViewState(latitude=centerlat,longitude=centerlon,zoom=zoom,pitch=0),
-                    map_style='light',tooltip={'text':'Localização do empreendimento'})
+    """Mapa Folium com satélite como base e perímetro KML sobreposto.
+
+    Apenas a camada de imagens busca dados externos (Esri). O KML é analisado
+    localmente e nunca executa links nem scripts existentes no arquivo.
+    """
+    import folium
+
+    points = geometry.get('all') or []
+    if not points:
+        return None
+
+    # O KML usa longitude,latitude; o Leaflet/Folium usa latitude,longitude.
+    lats = [float(p[1]) for p in points]
+    lons = [float(p[0]) for p in points]
+    center = [(min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2]
+    m = folium.Map(
+        location=center, tiles=None, zoom_start=17, control_scale=True,
+        prefer_canvas=True, max_zoom=19,
+    )
+    folium.TileLayer(
+        tiles=ESRI_IMAGERY_URL,
+        attr=ESRI_ATTRIBUTION,
+        name='Satélite (Esri)',
+        overlay=False, control=True, show=True,
+        max_zoom=19,
+    ).add_to(m)
+    # Alternativa útil quando a imagem de satélite não carregar em algum navegador.
+    folium.TileLayer(
+        tiles='OpenStreetMap',
+        name='Mapa de ruas', overlay=False, control=True, show=False,
+    ).add_to(m)
+
+    for polygon in geometry.get('polygons', []):
+        folium.Polygon(
+            locations=[[lat, lon] for lon, lat in polygon],
+            color='#00e5d3', weight=3, opacity=0.95,
+            fill=True, fill_color='#05b9aa', fill_opacity=0.19,
+            tooltip='Perímetro do empreendimento',
+        ).add_to(m)
+    for path in geometry.get('paths', []):
+        folium.PolyLine(
+            locations=[[lat, lon] for lon, lat in path],
+            color='#ffcb52', weight=4, opacity=0.95,
+            tooltip='Traçado do KML',
+        ).add_to(m)
+    for lon, lat in geometry.get('points', []):
+        folium.CircleMarker(
+            location=[lat, lon], radius=6,
+            color='#ffdc62', fill=True, fill_color='#ffeeb0',
+            fill_opacity=1, tooltip='Ponto do KML',
+        ).add_to(m)
+
+    if len(points) > 1 and (max(lats) - min(lats) > 1e-7 or max(lons) - min(lons) > 1e-7):
+        m.fit_bounds(
+            [[min(lats), min(lons)], [max(lats), max(lons)]],
+            padding=(24, 24), max_zoom=18,
+        )
+    folium.LayerControl(position='topright', collapsed=True).add_to(m)
+    return m

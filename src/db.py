@@ -92,10 +92,25 @@ def signed_file_url(client, storage_path: str, expires_in=900):
 
 
 def remove_document(client, doc: dict):
-    # A regra SQL pode recusar excluir o último orçamento de tarefa concluída.
-    # Exclui primeiro os metadados para preservar a integridade dessa regra.
-    delete(client, "documents", doc["id"])
-    client.storage.from_(BUCKET).remove([doc["storage_path"]])
+    """Exclui um documento por ID; políticas RLS decidem quem pode removê-lo.
+
+    Se a limpeza no Storage falhar, o erro informa que o registro já foi excluído,
+    evitando mostrar ao usuário uma falsa impressão de rollback.
+    """
+    response = client.table("documents").delete().eq("id", doc["id"]).execute()
+    if not response.data:
+        raise PermissionError(
+            "Nenhum registro foi excluído. Confira a permissão do usuário "
+            "e se o documento ainda está cadastrado."
+        )
+    try:
+        client.storage.from_(BUCKET).remove([doc["storage_path"]])
+    except Exception as exc:
+        raise RuntimeError(
+            "O registro foi removido do banco, mas o arquivo não pôde ser "
+            "apagado do Storage. Solicite ao administrador que limpe o caminho "
+            "órfão no bucket privado."
+        ) from exc
 
 
 def my_role(client):
