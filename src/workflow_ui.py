@@ -33,7 +33,7 @@ def open_task_panel(task: dict, panel: str):
     st.rerun()
 
 
-def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries, milestones, can_edit, user_id):
+def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries, milestones, can_edit, user_id, is_admin=False):
     st.subheader('Plano do empreendimento · Cronograma do empreendimento')
     st.caption('Roteiro técnico: 1.1–1.3 (Documentação) e 2.1–2.10 (Projetos). Os prazos são editáveis, não são prazos legais dos órgãos.')
     by_stage = {s['id']:s['name'] for s in stages}
@@ -45,7 +45,7 @@ def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries
     missing = [s for s in SPECIFICATIONS if s['code'] not in {spec['code'] for spec,_ in tagged}]
     if missing:
         st.info(f'Faltam {len(missing)} item(ns) do roteiro neste projeto. Os itens existentes serão preservados.')
-        if can_edit and st.button('Adicionar etapas técnicas faltantes',type='primary'):
+        if is_admin and st.button('Adicionar etapas técnicas faltantes',type='primary'):
             try:
                 payload=make_template_rows(date.today(),DEFAULT_SECTION_NAMES)
                 result=sb.rpc('add_missing_workflow_steps',{'p_project_id':project_id,'p_tasks':payload}).execute()
@@ -100,6 +100,32 @@ def overview_plan(sb, project_id, stages, tasks, documents, details_map, entries
                     if st.button('📅 Execução',key=f'plan_ex_{t["id"]}',use_container_width=True):open_task_panel(t,'Execução')
                 with buttons[3]:
                     if st.button('📎 Anexos',key=f'plan_attach_{t["id"]}',use_container_width=True):open_task_panel(t,'Anexos')
+                if is_admin:
+                    edit_col,delete_col=st.columns([1,1])
+                    with edit_col:
+                        if st.button('✎ Editar tarefa',key=f'plan_edit_{t["id"]}',use_container_width=True):
+                            open_task_panel(t,'Detalhes')
+                    with delete_col:
+                        if st.button('✕ Excluir tarefa',key=f'plan_delete_{t["id"]}',use_container_width=True):
+                            st.session_state['delete_task_confirm']=t['id']
+                            st.rerun()
+                    if st.session_state.get('delete_task_confirm')==t['id']:
+                        st.warning('A exclusão remove a tarefa, seus pagamentos, fichas, marcos, anexos e checklist. Gere um backup antes de confirmar.')
+                        confirm=st.checkbox('Confirmo a exclusão definitiva desta tarefa e dos dados vinculados.',
+                                            key=f'confirm_delete_task_{t["id"]}')
+                        send=st.button('Confirmar exclusão',key=f'execute_delete_{t["id"]}',
+                                       type='primary',disabled=not confirm)
+                        if send and confirm:
+                            try:
+                                paths=sb.rpc('admin_delete_workflow_task',{'p_task_id':t['id']}).execute().data or []
+                                st.session_state.pop('delete_task_confirm',None)
+                                if paths:
+                                    try:sb.storage.from_('project-files').remove(paths)
+                                    except Exception as storage_exc:
+                                        st.warning('Tarefa excluída, mas alguns arquivos podem continuar no Storage. '
+                                                   f'Faça a limpeza manual do bucket: {storage_exc}')
+                                st.success('Tarefa excluída.');st.rerun()
+                            except Exception as exc:st.error(f'Erro ao excluir tarefa: {exc}')
 
 
 def technical_form(sb, project_id: str, task: dict, can_edit: bool, details: dict | None):

@@ -38,17 +38,30 @@ CSS = """
 [data-testid="stAppViewContainer"]{background:linear-gradient(165deg,#f4f8fa 0%,#eef5f6 100%);}
 [data-testid="stSidebar"]{background:#102935!important;border-right:1px solid #244353!important;}
 [data-testid="stSidebar"] *{color:#eaf5f7!important;}
-/* Contraste do seletor de empreendimento: fundo claro + textos escuros (inclusive lista flutuante). */
-[data-testid="stSidebar"] [data-baseweb="select"]>div{background-color:#f8fcff!important;border:1px solid #9db6c2!important;}
-[data-testid="stSidebar"] [data-baseweb="select"] input,
-[data-testid="stSidebar"] [data-baseweb="select"] span,
-[data-testid="stSidebar"] [data-baseweb="select"] [role="combobox"],
-[data-testid="stSidebar"] [data-baseweb="select"] [role="combobox"] *{color:#143143!important;-webkit-text-fill-color:#143143!important;}
-[data-baseweb="popover"] [role="listbox"],
-[data-baseweb="popover"] [role="option"]{background:#f8fbfd!important;color:#143143!important;}
-[data-baseweb="popover"] [role="option"] *{color:#143143!important;-webkit-text-fill-color:#143143!important;}
-[data-baseweb="popover"] [role="option"]:hover{background:#d8ecee!important;}
-[data-testid="stSidebar"] [data-baseweb="select"] svg{fill:#173e50!important;}
+/* Contraste do empreendimento: não herdar o texto branco do menu escuro. */
+[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="combobox"]{
+  background:#ffffff!important; color:#153446!important; border:1px solid #8aaab8!important;
+  opacity:1!important;-webkit-text-fill-color:#153446!important;
+}
+[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] *,
+[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] input,
+[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
+[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] div,
+[data-testid="stSidebar"] div[data-testid="stSelectbox"] div[data-baseweb="select"] svg{
+  color:#153446!important;fill:#153446!important;-webkit-text-fill-color:#153446!important;
+  opacity:1!important;text-shadow:none!important;
+}
+[data-baseweb="popover"] [role="listbox"], [data-baseweb="popover"] [role="option"]{
+  background:#fff!important;color:#153446!important;opacity:1!important;
+}
+[data-baseweb="popover"] [role="option"] *,[data-baseweb="popover"] [role="option"] span{
+  color:#153446!important;-webkit-text-fill-color:#153446!important;opacity:1!important;
+}
+[data-baseweb="popover"] [role="option"]:hover{background:#d4eded!important;}
+.co-active-enterprise{font-size:.85rem;font-weight:750;color:#fff!important;
+  background:#0b6770;border:1px solid #31a6a8;border-radius:9px;
+  padding:9px 10px;margin-top:-4px;margin-bottom:14px;overflow-wrap:anywhere;}
 [data-testid="stSidebar"] .stButton button{background:transparent!important;border:1px solid transparent!important;min-height:40px;text-align:left!important;justify-content:flex-start!important;border-radius:10px!important;}
 [data-testid="stSidebar"] .stButton button:hover{background:#234956!important;border-color:#345965!important;}
 [data-testid="stSidebar"] .stButton button[kind="primary"]{background:#0b817e!important;border-color:#22a5a1!important;}

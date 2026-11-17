@@ -1,4 +1,6 @@
-# CronogramaObras Cloud v0.1.5 — Gestão Compartilhada
+> **v0.1.6**: siga [ATUALIZAR_v0.1.6.md](ATUALIZAR_v0.1.6.md). A criação e gestão de contas usa a Edge Function `admin-users`.
+
+# CronogramaObras Cloud v0.1.6 — Administração de usuários
 
 Sistema Streamlit + Supabase. O roteiro de implantação segue as seções **Documentação (1.1 a 1.3)** e **Projetos Técnicos (2.1 a 2.10)**, com painel gerencial, Gantt, custos, tarefas, anexos, equipe, relatórios e backup. A interface não usa o nome do documento que originou o roteiro.
 
@@ -7,7 +9,7 @@ Sistema Streamlit + Supabase. O roteiro de implantação segue as seções **Doc
 - **1.0 Localização do empreendimento:** antes de 1.1 Matrícula, anexar KML do Google Earth (até 10 MB), visualizar pontos, linhas e polígonos no mapa e abrir/baixar o original. O KML fica arquivado como documento privado vinculado à Matrícula; arquivos com recursos não suportados continuam disponíveis para abrir no Google Earth.
 - **Navegação:** removida a aba Projetos; selecionar o empreendimento apenas em **Empreendimento ativo**, com cores de texto e de fundo corrigidas. Novo empreendimento tem botão separado para Administradores e usuários Padrão.
 - **Compartilhamento:** todos os usuários autenticados veem todos os projetos, suas etapas, tarefas e documentos; o repositório GitHub não recebe arquivos do Supabase.
-- **Perfis globais:** Administrador (cria, edita, define funções de usuários, restaura backups e exclui qualquer projeto); Padrão (cria, edita, envia anexos); Visualizador (somente leitura, mapa, relatórios e download de anexos). **Novas contas entram como Visualizador** até aprovação por um Administrador.
+- **Perfis globais:** Administrador (cria, edita, define funções de usuários, restaura backups e exclui qualquer projeto); Padrão (cria, edita, envia anexos); Visualizador (somente leitura, mapa, relatórios e download de anexos). **A partir da v0.1.6, novas contas são criadas pelo Administrador** (não existe autoinscrição pela interface).
 - **Segurança:** o RLS permanece ativo no banco e no Storage privado; os botões também respeitam as permissões. Chaves privadas/service_role não fazem parte do aplicativo.
 - **Backups:** exportação, restauração e exclusão somente para administradores. Antes de excluir, baixe e confira uma cópia de segurança.
 
@@ -18,7 +20,7 @@ Sistema Streamlit + Supabase. O roteiro de implantação segue as seções **Doc
 3. **Obrigatório:** atribua o primeiro administrador manualmente no SQL Editor usando `supabase/PRIMEIRO_ADMINISTRADOR.sql`. Substitua `SEU_EMAIL_CADASTRADO@EXEMPLO.COM` pelo e-mail real da conta já criada e confira o resultado. **Até fazer isso, todos os usuários existentes terão nível Visualizador** (por segurança).
 4. GitHub: atualize o código do repositório `TS-Tec-Dev/projetosstang` com os arquivos deste ZIP. **Não envie `.streamlit/secrets.toml`**.
 5. Streamlit: Secrets continuam com `SUPABASE_URL` e `SUPABASE_ANON_KEY`; faça Reboot e entre novamente.
-6. Em **Equipe**, o Administrador define outros administradores, usuários Padrão ou Visualizadores. Em **Backups**, o Administrador tem a opção de excluir qualquer projeto com confirmação.
+6. Em **Administrar usuários**, o Administrador cadastra usuários, define níveis de acesso e vencimentos. Em **Backups**, o Administrador tem a opção de excluir qualquer projeto com confirmação.
 
 ### Primeira instalação
 
